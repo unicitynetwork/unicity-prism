@@ -1,0 +1,8 @@
+# Maximum cognitive complexity allowed
+cognitive-complexity-threshold = 25
+
+# Don't allow too many arguments
+too-many-arguments-threshold = 5
+
+# Don't allow too many lines
+too-many-lines-threshold = 200

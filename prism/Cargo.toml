@@ -1,0 +1,13 @@
+[package]
+name = "unicity-prism-core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+risc0-zkvm = { version = "0.21.0", default-features = false }
+
+[features]
+cuda = ["risc0-zkvm/cuda"]
+default = []
+prove = ["risc0-zkvm/prove"]

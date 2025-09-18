@@ -1,0 +1,46 @@
+[workspace]
+members = [
+    "prism",
+]
+
+[workspace.dependencies]
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+
+[workspace.lints.clippy]
+# Security lints - deny these completely
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unimplemented = "deny"
+todo = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"  # No direct array[i] access
+integer_arithmetic = "deny"  # Prevent overflow
+float_arithmetic = "deny"
+
+# Must be explicit about error handling
+result_unwrap_used = "deny"
+option_unwrap_used = "deny"
+
+# Memory safety
+cast_lossless = "deny"
+cast_possible_truncation = "deny"
+cast_possible_wrap = "deny"
+cast_sign_loss = "deny"
+
+# Code quality
+complexity = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+correctness = "deny"
+suspicious = "deny"
+
+# Math specific
+integer_overflow = "deny"
+lossy_float_literal = "deny"
+
