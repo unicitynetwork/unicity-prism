@@ -1,5 +1,6 @@
 mod blockdata;
 mod consensus;
+mod hashes;
 mod io;
 mod network;
 mod p2p;
