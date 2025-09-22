@@ -1,5 +1,5 @@
+use crate::consensus::{Decodable, Encodable, Params};
 pub use bitcoin::block::{BlockHash, TxMerkleNode, Version};
-use bitcoin::consensus::Encodable;
 use bitcoin::hashes::{hash_newtype, sha256d, Hash};
 use bitcoin::io::{Error, Read, Write};
 use bitcoin::{CompactTarget, Transaction, WitnessMerkleNode};
@@ -12,13 +12,13 @@ hash_newtype! {
     pub struct RandomXHash(sha256d::Hash);
 }
 
-impl bitcoin::consensus::Encodable for RandomXHash {
+impl Encodable for RandomXHash {
     fn consensus_encode<W: Write + ?Sized>(&self, writer: &mut W) -> Result<usize, Error> {
         self.0.consensus_encode(writer)
     }
 }
 
-impl bitcoin::consensus::Decodable for RandomXHash {
+impl Decodable for RandomXHash {
     fn consensus_decode<R: Read + ?Sized>(
         reader: &mut R,
     ) -> Result<Self, bitcoin::consensus::encode::Error> {
@@ -65,7 +65,7 @@ impl Header {
     }
 
     pub fn difficulty(&self, params: impl AsRef<Params>) -> u128 {
-        self.target().difficulty(params)
+        todo!()
     }
 }
 

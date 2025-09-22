@@ -1,3 +1,6 @@
+use crate::p2p::Magic;
+use bitcoin::constants::ChainHash;
+use bitcoin::network::UnknownChainHashError;
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
@@ -31,5 +34,13 @@ impl Network {
             Network::Testnet => "alphatestnet",
             Network::Regtest => "alpharegtest",
         }
+    }
+}
+
+impl TryFrom<ChainHash> for Network {
+    type Error = UnknownChainHashError;
+
+    fn try_from(chain_hash: ChainHash) -> Result<Self, Self::Error> {
+        todo!()
     }
 }

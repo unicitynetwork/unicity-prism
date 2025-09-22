@@ -4,6 +4,7 @@ mod io;
 mod network;
 mod p2p;
 mod params;
+mod pow;
 
 use crate::blockdata::block::Block;
 use std::net::SocketAddr;

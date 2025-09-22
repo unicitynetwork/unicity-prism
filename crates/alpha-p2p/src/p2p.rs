@@ -1,8 +1,9 @@
+use crate::consensus::Params;
 use crate::consensus::{Decodable, Encodable};
 use crate::io::{Error, Read, Write};
 use crate::network::Network;
-use crate::params::Params;
 pub use bitcoin::p2p::ServiceFlags;
+use thiserror::Error;
 
 /// Network magic bytes to identify the cryptocurrency network the message was intended for.
 #[derive(Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
@@ -52,5 +53,24 @@ impl Decodable for Magic {
         reader: &mut R,
     ) -> Result<Self, bitcoin::consensus::encode::Error> {
         Ok(Magic(Decodable::consensus_decode(reader)?))
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Error)]
+pub enum MagicError {
+    #[error("unknown network magic: {0}")]
+    UnknownMagic(Magic),
+}
+
+impl TryFrom<Magic> for Network {
+    type Error = MagicError;
+
+    fn try_from(magic: Magic) -> Result<Self, Self::Error> {
+        match magic {
+            Magic::MAINNET => Ok(Network::Mainnet),
+            Magic::TESTNET => Ok(Network::Testnet),
+            Magic::REGTEST => Ok(Network::Regtest),
+            _ => Err(MagicError::UnknownMagic(magic)),
+        }
     }
 }
