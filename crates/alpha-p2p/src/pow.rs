@@ -1,1 +1,1 @@
-pub use bitcoin::pow::Target;
+pub use bitcoin::pow::{CompactTarget, Target};
