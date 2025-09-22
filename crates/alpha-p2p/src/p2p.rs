@@ -1,3 +1,5 @@
+mod address;
+
 use crate::consensus::Params;
 use crate::consensus::{Decodable, Encodable};
 use crate::io::{Error, Read, Write};
@@ -22,7 +24,7 @@ impl Magic {
     }
 
     pub fn from_params(params: impl AsRef<Params>) -> Self {
-        params.as_ref().network.into()
+        params.as_ref().network.clone().into()
     }
 }
 

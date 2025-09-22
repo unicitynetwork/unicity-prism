@@ -3,14 +3,12 @@ mod consensus;
 mod io;
 mod network;
 mod p2p;
-mod params;
 mod pow;
 
 use crate::blockdata::block::Block;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
