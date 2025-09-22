@@ -1,8 +1,9 @@
 mod address;
+mod message;
 
 use crate::consensus::Params;
 use crate::consensus::{Decodable, Encodable};
-use crate::io::{Error, Read, Write};
+use crate::io::{IoError, Read, Write};
 use crate::network::Network;
 pub use bitcoin::p2p::ServiceFlags;
 use thiserror::Error;
@@ -45,7 +46,7 @@ impl std::fmt::Display for Magic {
 }
 
 impl Encodable for Magic {
-    fn consensus_encode<W: Write + ?Sized>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write + ?Sized>(&self, writer: &mut W) -> Result<usize, IoError> {
         self.0.consensus_encode(writer)
     }
 }

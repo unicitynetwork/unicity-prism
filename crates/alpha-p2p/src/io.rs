@@ -1,1 +1,1 @@
-pub use bitcoin::io::{Error, Read, Write};
+pub use bitcoin::io::{Error as IoError, Read, Write};

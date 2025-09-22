@@ -1,8 +1,9 @@
-use crate::consensus::{Decodable, Encodable, Params};
-pub use bitcoin::block::{BlockHash, TxMerkleNode, Version};
-use bitcoin::hashes::{hash_newtype, sha256d, Hash};
-use bitcoin::io::{Error, Read, Write};
-use bitcoin::{CompactTarget, Transaction, WitnessMerkleNode};
+use crate::blockdata::transaction::Transaction;
+use crate::consensus::{self, Decodable, Encodable, EncodeDecodeError, Params};
+use crate::hashes::{hash_newtype, sha256d, Hash};
+use crate::io::{IoError, Read, Write};
+use crate::pow::{CompactTarget, Target};
+pub use bitcoin::block::{BlockHash, TxMerkleNode, Version, WitnessMerkleNode};
 use serde::{Deserialize, Serialize};
 
 /// Denotes in the block header if it is a RandomX block, or not.
@@ -13,15 +14,13 @@ hash_newtype! {
 }
 
 impl Encodable for RandomXHash {
-    fn consensus_encode<W: Write + ?Sized>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write + ?Sized>(&self, writer: &mut W) -> Result<usize, IoError> {
         self.0.consensus_encode(writer)
     }
 }
 
 impl Decodable for RandomXHash {
-    fn consensus_decode<R: Read + ?Sized>(
-        reader: &mut R,
-    ) -> Result<Self, bitcoin::consensus::encode::Error> {
+    fn consensus_decode<R: Read + ?Sized>(reader: &mut R) -> Result<Self, EncodeDecodeError> {
         use bitcoin::hashes::Hash;
         Ok(Self::from_byte_array(
             <<RandomXHash as Hash>::Bytes>::consensus_decode(reader)?,
@@ -51,21 +50,77 @@ pub struct Header {
     pub randomx_hash: [u8; 32],
 }
 
-// TODO: Encoding implementation
+#[allow(
+    clippy::arithmetic_side_effects,
+    reason = "It can't possibly overflow, as the values are expected to be small."
+)]
+impl Encodable for Header {
+    fn consensus_encode<W: Write + ?Sized>(&self, writer: &mut W) -> Result<usize, IoError> {
+        let mut len = 0;
+        len += self.version.consensus_encode(writer)?;
+        len += self.prev_blockhash.consensus_encode(writer)?;
+        len += self.merkle_root.consensus_encode(writer)?;
+        len += self.timestamp.consensus_encode(writer)?;
+        len += self.bits.consensus_encode(writer)?;
+        len += self.nonce.consensus_encode(writer)?;
+        len += self.randomx_hash.consensus_encode(writer)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for Header {
+    #[inline]
+    fn consensus_decode_from_finite_reader<R: Read + ?Sized>(
+        r: &mut R,
+    ) -> Result<Header, EncodeDecodeError> {
+        Ok(Header {
+            version: Decodable::consensus_decode_from_finite_reader(r)?,
+            prev_blockhash: Decodable::consensus_decode_from_finite_reader(r)?,
+            merkle_root: Decodable::consensus_decode_from_finite_reader(r)?,
+            timestamp: Decodable::consensus_decode_from_finite_reader(r)?,
+            bits: Decodable::consensus_decode_from_finite_reader(r)?,
+            nonce: Decodable::consensus_decode_from_finite_reader(r)?,
+            randomx_hash: Decodable::consensus_decode_from_finite_reader(r)?,
+        })
+    }
+
+    #[inline]
+    fn consensus_decode<R: Read + ?Sized>(r: &mut R) -> Result<Header, EncodeDecodeError> {
+        let mut r = r.take(consensus::encode::MAX_VEC_SIZE as u64);
+        Ok(Header {
+            version: Decodable::consensus_decode(&mut r)?,
+            prev_blockhash: Decodable::consensus_decode(&mut r)?,
+            merkle_root: Decodable::consensus_decode(&mut r)?,
+            timestamp: Decodable::consensus_decode(&mut r)?,
+            bits: Decodable::consensus_decode(&mut r)?,
+            nonce: Decodable::consensus_decode(&mut r)?,
+            randomx_hash: Decodable::consensus_decode(&mut r)?,
+        })
+    }
+}
 
 impl Header {
     /// The number of bytes the block header contributes to the size of the block.
     pub const SIZE: usize = 4 + 32 + 32 + 4 + 4 + 4 + 32; // 112
 
+    /// Return the block hash.
     pub fn block_hash(&self) -> BlockHash {
         let mut engine = BlockHash::engine();
+        #[allow(clippy::expect_used, reason = "Expected inputs can't fail")]
         self.consensus_encode(&mut engine)
-            .expect("engines don't error");
+            .expect("Expected inputs can't fail");
         BlockHash::from_engine(engine)
     }
 
-    pub fn difficulty(&self, params: impl AsRef<Params>) -> u128 {
+    /// Computes the target (range [0, T] inclusive) that a blockhash must land in to be valid.
+    pub fn target(&self) -> Target {
+        self.bits.into()
+    }
+
+    /// Computes the difficulty for mining.
+    pub fn difficulty(&self, _params: impl AsRef<Params>) -> u128 {
         todo!()
+        // self.target().difficulty(params)
     }
 }
 

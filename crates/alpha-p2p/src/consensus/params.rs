@@ -1,6 +1,7 @@
 use crate::network::Network;
 use crate::pow::Target;
 
+/// ASERT anchor parameters.
 pub struct ASERTAnchorParams {
     /// Anchor block height.
     pub height: u32,
@@ -10,6 +11,7 @@ pub struct ASERTAnchorParams {
     pub prev_block_time: u64,
 }
 
+/// Consensus parameters for different networks.
 pub struct Params {
     /// Network for which these parameters are defined.
     pub network: Network,
@@ -66,7 +68,7 @@ impl Params {
         randomx_epoch_duration: 7 * 24 * 60 * 60, // 1 week
         asert_activiation_height: 70_240, // 35ab17718c910ffbd7624b54ec23bafa82430532904cd1998e74898928014308
         asert_anchor_params: Some(ASERTAnchorParams {
-            height: 70_232,
+            height: 70_232, // c3c990c429d3588c929681453b4a7557ce121b1de0d31044e713eec9b8fa3959
             bits: 0x1e1d7cb5,
             prev_block_time: 1_725_980_278,
         }),
