@@ -2,6 +2,7 @@
 members = [
     "crates/*",
 ]
+resolver = "3"
 
 [workspace.package]
 authors = ["Unicity Labs <devs@unicity-labs.com"]
