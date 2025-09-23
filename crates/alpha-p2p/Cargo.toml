@@ -13,11 +13,14 @@ readme.workspace = true
 [dependencies]
 bitcoin = { version = "0.32.7", features = ["base64", "rand", "serde"] }
 bitcoin-units = "0.2.0"
+clap = { version = "4.5.40", features = ["derive"] }
 tokio.workspace = true
 sha2.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 hex.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [dev-dependencies]
 tokio-test.workspace = true
