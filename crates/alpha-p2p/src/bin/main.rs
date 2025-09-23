@@ -81,7 +81,7 @@ struct Args {
 impl Args {
     fn data_dir(&self) -> PathBuf {
         self.datadir.clone().unwrap_or_else(|| {
-            ProjectDirs::from("com", "unicity-labs", "prism-migrator")
+            ProjectDirs::from("com", "unicitylabs", "prism-migrator")
                 .map(|proj_dirs| proj_dirs.data_dir().to_path_buf())
                 .unwrap_or_else(|| {
                     // Fallback if ProjectDirs fails, for whatever reason.
