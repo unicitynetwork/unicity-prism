@@ -1,8 +1,9 @@
 use alpha_p2p::Network;
 use clap::Parser;
+use directories::ProjectDirs;
 use std::net;
 use std::path::PathBuf;
-use tracing::info;
+use tracing::{debug, info};
 use tracing_subscriber::fmt::time::ChronoUtc;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -24,6 +25,18 @@ struct Args {
     #[arg(short, long, default_value = "testnet")]
     pub network: Network,
 
+    /// Only connect to IPv4 peers.
+    #[arg(long, conflicts_with = "ipv6_only", default_value = "false")]
+    pub ipv4_only: bool,
+
+    /// Only connect to IPv6 peers.
+    #[arg(long, conflicts_with = "ipv4_only", default_value = "false")]
+    pub ipv6_only: bool,
+
+    /// Prefer IPv6 connections when both IPv4 and IPv6 are available.
+    #[arg(long, default_value = "false")]
+    pub prefer_ipv6: bool,
+
     /// Maximum number of connections to maintain.
     #[arg(default_value = 8)]
     pub max_connections: usize,
@@ -41,8 +54,8 @@ struct Args {
     pub verbose: bool,
 
     /// Log level (error, warn, info, debug, trace).
-    #[arg(long, default_value = "info")]
-    pub log_level: String,
+    #[arg(long, default_value_t = tracing::Level::INFO, value_parser = ["error", "warn", "info", "debug", "trace"])]
+    pub log_level: tracing::Level,
 
     /// Start syncing from the specified block height.
     #[arg(long, default_value = 0)]
@@ -65,6 +78,45 @@ struct Args {
     pub no_color: bool,
 }
 
+impl Args {
+    fn data_dir(&self) -> PathBuf {
+        self.datadir.clone().unwrap_or_else(|| {
+            ProjectDirs::from("com", "unicity-labs", "prism-migrator")
+                .map(|proj_dirs| proj_dirs.data_dir().to_path_buf())
+                .unwrap_or_else(|| {
+                    // Fallback if ProjectDirs fails, for whatever reason.
+                    std::env::current_dir()
+                        .unwrap_or_else(|_| PathBuf::from("."))
+                        .join(".prism-migrator")
+                })
+        })
+    }
+
+    fn should_connect_to_peer(&self, addr: &net::SocketAddr) -> bool {
+        match addr {
+            net::SocketAddr::V4(_) => !self.ipv6_only,
+            net::SocketAddr::V6(_) => !self.ipv4_only,
+        }
+    }
+
+    fn filter_peers(&self, peers: Vec<net::SocketAddr>) -> Vec<net::SocketAddr> {
+        let mut filtered: Vec<net::SocketAddr> = peers
+            .into_iter()
+            .filter(|addr| self.should_connect_to_peer(addr))
+            .collect();
+
+        if !self.ipv4_only && !self.ipv6_only && self.prefer_ipv6 {
+            filtered.sort_by(|a, b| match (a, b) {
+                (net::SocketAddr::V6(_), net::SocketAddr::V4(_)) => std::cmp::Ordering::Less,
+                (net::SocketAddr::V4(_), net::SocketAddr::V6(_)) => std::cmp::Ordering::Greater,
+                _ => std::cmp::Ordering::Equal,
+            });
+        }
+
+        filtered
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
@@ -75,24 +127,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn init_tracing(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
-    let level = match args.log_level.as_str() {
-        "error" => tracing::Level::ERROR,
-        "warn" => tracing::Level::WARN,
-        "info" => tracing::Level::INFO,
-        "debug" => tracing::Level::DEBUG,
-        "trace" => tracing::Level::TRACE,
-        _ => {
-            eprintln!(
-                "Invalid log level: {}. Using 'info' as default.",
-                args.log_level
-            );
-            tracing::Level::INFO
-        }
-    };
-
     // Which crates to filter with fallback
     let env_filter = EnvFilter::builder()
-        .with_default_directive(level.into())
+        .with_default_directive(args.log_level.into())
         .from_env_lossy()
         .add_directive("tokio=warn".parse()?);
 
@@ -111,6 +148,8 @@ fn init_tracing(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     );
 
     subscriber.try_init()?;
+
+    debug!("Starting Prism Migrator with level: {}", level);
 
     Ok(())
 }

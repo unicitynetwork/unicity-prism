@@ -20,6 +20,7 @@ alloy-consensus = "1.0.16"
 alloy-evm = "0.12.3"
 alloy-rlp = "0.3.12"
 alloy-rpc-types = "1.0"
+directories = "6.0.0"
 sha2 = "0.10.9"
 hex = "0.4.3"
 tokio = { version = "1.0", features = ["full"] }

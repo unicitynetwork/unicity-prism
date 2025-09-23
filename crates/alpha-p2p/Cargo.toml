@@ -14,6 +14,7 @@ readme.workspace = true
 bitcoin = { version = "0.32.7", features = ["base64", "rand", "serde"] }
 bitcoin-units = "0.2.0"
 clap = { version = "4.5.40", features = ["derive"] }
+directories.workspace = true
 tokio.workspace = true
 sha2.workspace = true
 serde.workspace = true
