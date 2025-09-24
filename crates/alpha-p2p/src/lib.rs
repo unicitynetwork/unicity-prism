@@ -6,6 +6,7 @@ mod io;
 pub mod network;
 mod p2p;
 mod pow;
+mod util;
 
 pub use network::Network;
 
