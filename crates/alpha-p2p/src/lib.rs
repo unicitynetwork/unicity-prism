@@ -12,7 +12,7 @@ pub use network::Network;
 
 use std::time::Duration;
 
-const PROTOCOL_VERSION: u32 = 70015;
+const PROTOCOL_VERSION: u32 = 70016;
 const NODE_NETWORK: u8 = 1;
 const NODE_WITNESS: u8 = 1 << 3; // This is 8 in decimal
 const MAX_PROTOCOL_MESSAGE_LENGTH: usize = 32 * 1024 * 1024; // 32 MB
