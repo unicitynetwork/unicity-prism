@@ -6,18 +6,18 @@ use alpha_p2p_derive::ConsensusEncoding;
 /// point in the blockchain. It allows a peer which has been disconnected or started for the
 /// first time to get the data it needs to request the blocks it hasn't seen.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ConsensusEncoding)]
-pub struct GetBlocks {
+pub struct GetHeaders {
     /// The protocol version number, same as in the version message.
     version: u32,
     /// One or more block header hashes (32 bytes each) in internal byte order. Must be provided
     /// in reverse order of block height. Highest height hashes first.
     block_header_hashes: Vec<BlockHash>,
     /// The last block header hash being requested. If none, hash is set to all zeroes which
-    /// will send a maximum of 500 hashes.
+    /// will send a maximum of 2,000 hashes.
     stop_hash: BlockHash,
 }
 
-impl GetBlocks {
+impl GetHeaders {
     pub fn new(
         version: u32,
         block_header_hashes: Vec<BlockHash>,
@@ -55,7 +55,7 @@ mod tests {
         let hash2: BlockHash =
             hex_to_hash("5c3e6403d40837110a2e8afb602b1c01714bda7ce23bea0a0000000000000000")?;
 
-        let get_block_message = GetBlocks::new(70001, vec![hash1, hash2], None);
+        let get_block_message = GetHeaders::new(70001, vec![hash1, hash2], None);
         let mut encoded = Vec::new();
         let _bytes_written = get_block_message.consensus_encode(&mut encoded)?;
 
@@ -78,7 +78,7 @@ mod tests {
         )?;
 
         let mut cursor = std::io::Cursor::new(&hex_data);
-        let decoded_message = GetBlocks::consensus_decode(&mut cursor)?;
+        let decoded_message = GetHeaders::consensus_decode(&mut cursor)?;
 
         let expected_version = 70001;
         let expected_hash1: BlockHash =
