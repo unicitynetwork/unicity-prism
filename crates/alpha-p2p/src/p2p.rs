@@ -1,9 +1,9 @@
 mod address;
-mod message;
+pub mod message;
 
 use crate::consensus::Params;
 use crate::consensus::{Decodable, Encodable};
-use crate::io::{IoError, Read, Write};
+use crate::io::{Error as IoError, Read, Write};
 use crate::network::Network;
 pub use bitcoin::p2p::ServiceFlags;
 use thiserror::Error;

@@ -1,4 +1,5 @@
 mod blockdata;
+mod client;
 mod consensus;
 mod hashes;
 mod io;

@@ -4,13 +4,15 @@ use bitcoin::network::UnknownChainHashError;
 use std::str::FromStr;
 use thiserror::Error;
 
+/// Errors that can occur when parsing a chain type.
 #[derive(Clone, Debug, Error)]
 pub enum ChainTypeError {
+    /// The provided chain type string is invalid.
     #[error("Invalid chain type: {0}")]
     InvalidChainType(String),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Network {
     /// Mainnet Unicity network.
     Mainnet,

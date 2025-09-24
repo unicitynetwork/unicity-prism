@@ -1,4 +1,4 @@
-mod blockdata;
+pub(crate) mod blockdata;
 mod bloom;
 
 pub use bitcoin::p2p::message::{
