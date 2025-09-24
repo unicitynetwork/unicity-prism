@@ -2,6 +2,7 @@
 // Only requests are implement as this client is not meant to relay.
 
 mod get_blocks;
+mod get_data;
 mod inventory;
 
 pub enum Message {

@@ -1,7 +1,7 @@
 use crate::blockdata::transaction::Transaction;
 use crate::consensus::{self, Decodable, Encodable, EncodeDecodeError, Params};
 use crate::hashes::{hash_newtype, sha256d, Hash};
-use crate::io::{IoError, Read, Write};
+use crate::io::{Error as IoError, Read, Write};
 use crate::pow::{CompactTarget, Target};
 pub use bitcoin::block::{BlockHash, TxMerkleNode, Version, WitnessMerkleNode};
 use serde::{Deserialize, Serialize};
