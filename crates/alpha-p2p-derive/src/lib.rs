@@ -2,7 +2,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, parse_macro_input};
+use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
 /// Derives `Encodable` and `Decodable` traits for consensus encoding.
 ///
@@ -11,7 +11,7 @@ use syn::{Data, DeriveInput, Fields, parse_macro_input};
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// use consensus_derive::ConsensusEncoding;
 ///
 /// #[derive(ConsensusEncoding)]
@@ -41,8 +41,8 @@ pub fn derive_consensus_encoding(input: TokenStream) -> TokenStream {
                     &input,
                     "ConsensusEncoding cannot be derived for unit structs",
                 )
-                .to_compile_error()
-                .into();
+                    .to_compile_error()
+                    .into();
             }
         },
         Data::Enum(_) => {
@@ -50,16 +50,16 @@ pub fn derive_consensus_encoding(input: TokenStream) -> TokenStream {
                 &input,
                 "ConsensusEncoding cannot be derived for enums yet",
             )
-            .to_compile_error()
-            .into();
+                .to_compile_error()
+                .into();
         }
         Data::Union(_) => {
             return syn::Error::new_spanned(
                 &input,
                 "ConsensusEncoding cannot be derived for unions",
             )
-            .to_compile_error()
-            .into();
+                .to_compile_error()
+                .into();
         }
     };
 

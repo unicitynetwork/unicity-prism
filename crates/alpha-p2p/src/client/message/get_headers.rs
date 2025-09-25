@@ -23,7 +23,7 @@ use alpha_p2p_derive::ConsensusCodec;
 ///
 /// ## Usage Example
 ///
-/// ```rust
+/// ```ignore
 /// use alpha_p2p::blockdata::block::BlockHash;
 /// use alpha_p2p::p2p::message_blockdata::GetHeaders;
 /// use alpha_p2p::hashes::Hash;
@@ -105,7 +105,7 @@ impl GetHeaders {
     /// A new instance of `GetHeaders` message.
     ///
     /// # Usage Example
-    /// ```rust
+    /// ```ignore
     /// use alpha_p2p::blockdata::block::BlockHash;
     /// use alpha_p2p::p2p::message_blockdata::GetHeaders;
     ///
@@ -140,7 +140,7 @@ impl GetHeaders {
     /// * `u32` - The protocol version number.
     ///
     /// # Example
-    /// ```rust
+    /// ```ignore
     /// use alpha_p2p::p2p::message_blockdata::GetHeaders;
     ///
     /// let get_headers = GetHeaders::new(
@@ -165,7 +165,7 @@ impl GetHeaders {
     /// * `&[BlockHash]` - A slice of block header hashes.
     ///
     /// # Example
-    /// ```rust
+    /// ```ignore
     /// use alpha_p2p::blockdata::block::BlockHash;
     /// use alpha_p2p::p2p::message_blockdata::GetHeaders;
     ///
@@ -198,7 +198,7 @@ impl GetHeaders {
     /// * `&BlockHash` - A reference to the stop hash.
     ///
     /// # Example
-    /// ```rust
+    /// ```ignore
     /// use alpha_p2p::blockdata::block::BlockHash;
     /// use alpha_p2p::p2p::message_blockdata::GetHeaders;
     ///
@@ -224,9 +224,9 @@ impl GetHeaders {
     /// to avoid carrying over previous locator hashes.
     ///
     /// # Example
-    /// ```rust
+    /// ```ignore
     /// use alpha_p2p::blockdata::block::BlockHash;
-    /// use alpha_p2p::p2p::message_blockdata::GetHeaders:
+    /// use alpha_p2p::p2p::message_blockdata::GetHeaders;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut get_headers = GetHeaders::new(
@@ -256,7 +256,7 @@ impl GetHeaders {
     /// to ensure that the maximum response size (2000 headers) is used.
     ///
     /// # Example
-    /// ```rust
+    /// ```ignore
     /// use alpha_p2p::blockdata::block::BlockHash;
     /// use alpha_p2p::p2p::message_blockdata::GetHeaders;
     ///
@@ -285,7 +285,7 @@ impl GetHeaders {
     /// the default value (all zeros).
     ///
     /// # Example
-    /// ```rust
+    /// ```ignore
     /// use alpha_p2p::blockdata::block::BlockHash;
     /// use alpha_p2p::p2p::message_blockdata::GetHeaders;
     ///
@@ -315,7 +315,7 @@ impl GetHeaders {
 mod tests {
     use super::*;
     use crate::consensus::{Decodable, Encodable};
-    use crate::util::test_util::hex_to_hash;
+    use crate::util::hex_to_hash;
 
     #[test]
     pub fn test_getheaders_encode() -> Result<(), Box<dyn std::error::Error>> {

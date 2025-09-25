@@ -183,7 +183,7 @@ impl Decodable for Inventory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::util::test_util::hex_to_hash;
+    use crate::util::hex_to_hash;
 
     #[test]
     fn test_inventory_encode() -> Result<(), Box<dyn std::error::Error>> {

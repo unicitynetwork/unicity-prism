@@ -1,9 +1,9 @@
 // See: https://developer.bitcoin.org/reference/p2p_networking.html#data-messages
 // Only requests are implement as this client is not meant to relay.
 
-mod get_data;
-mod get_headers;
-mod inventory;
+pub mod get_data;
+pub mod get_headers;
+pub mod inventory;
 
 use get_headers::GetHeaders;
 

@@ -1,8 +1,8 @@
-use crate::Network;
 use crate::client::peer::Peer;
+use crate::Network;
 use std::path::PathBuf;
 
-mod message;
+pub mod message;
 mod peer;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

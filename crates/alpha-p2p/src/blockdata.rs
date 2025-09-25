@@ -1,2 +1,2 @@
-pub(crate) mod block;
-pub(crate) mod transaction;
+pub mod block;
+pub mod transaction;

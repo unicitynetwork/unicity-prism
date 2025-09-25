@@ -1,11 +1,18 @@
-mod blockdata;
+#![cfg_attr(test, allow(clippy::integer_arithmetic))]
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::expect_used))]
+#![cfg_attr(test, allow(clippy::arithmetic_side_effects))]
+#![cfg_attr(test, allow(clippy::cast_sign_loss))]
+#![cfg_attr(test, allow(clippy::indexing_slicing))]
+
+pub mod blockdata;
 mod client;
 mod consensus;
 mod hashes;
 mod io;
 pub mod network;
 mod p2p;
-mod pow;
+pub mod pow;
 mod util;
 
 pub use network::Network;

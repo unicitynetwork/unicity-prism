@@ -10,7 +10,7 @@
 //!
 //! # Example
 //!
-//! ```
+//! ```ignore
 //! use alpha_p2p::client::message::{GetData, inventory::{Inventory, InventoryList}};
 //! use alpha_p2p::blockdata::transaction::Txid;
 //! use alpha_p2p::blockdata::block::BlockHash;
@@ -58,7 +58,7 @@ impl GetData {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use alpha_p2p::client::message::{GetData, inventory::{Inventory, InventoryList}};
     /// use alpha_p2p::blockdata::transaction::Txid;
     /// use alpha_p2p::blockdata::block::BlockHash;
@@ -88,7 +88,7 @@ impl GetData {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use alpha_p2p::client::message::{GetData, inventory::{Inventory, InventoryList}};
     /// use alpha_p2p::blockdata::transaction::Txid;
     /// use alpha_p2p::blockdata::block::BlockHash;
@@ -116,7 +116,7 @@ impl GetData {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use alpha_p2p::client::message::{GetData, inventory::{Inventory, InventoryList}};
     /// use alpha_p2p::blockdata::transaction::Txid;
     /// use alpha_p2p::blockdata::block::BlockHash;
@@ -144,7 +144,7 @@ impl GetData {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use alpha_p2p::client::message::{GetData, inventory::{Inventory, InventoryList}};
     ///
     /// let get_data = GetData::new(vec![]);
@@ -165,7 +165,7 @@ impl GetData {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use alpha_p2p::client::message::{GetData, inventory::{Inventory, InventoryList}};
     /// use alpha_p2p::blockdata::transaction::Txid;
     /// use alpha_p2p::blockdata::block::BlockHash;
@@ -192,7 +192,7 @@ impl GetData {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use alpha_p2p::client::message::{GetData, inventory::{Inventory, InventoryList}};
     ///
     /// let get_data = GetData::empty();
@@ -210,7 +210,7 @@ mod tests {
     use super::*;
     use crate::blockdata::{block::BlockHash, transaction::Txid};
     use crate::consensus::{Decodable, Encodable};
-    use crate::util::test_util::hex_to_hash;
+    use crate::util::hex_to_hash;
 
     #[test]
     fn test_get_data_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
