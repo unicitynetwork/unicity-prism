@@ -75,7 +75,7 @@ impl Params {
         unicity_enabled: true,
         rule_change_activiation_threshold: 1815, // 90% of 2016
         miner_confirmation_window: 2016,         // nPowTargetTimespan / nPowTargetSpacing
-        max_attainable_target: Target::ZERO,     // Unsure yet if this is needed for Alpha?
+        max_attainable_target: Target::zero(),     // Unsure yet if this is needed for Alpha?
         pow_target_spacing: 2 * 60,              // 2 minutes
         pow_target_timespan: 14 * 24 * 60 * 60 / 5, // two weeks / 5
         allow_min_difficulty_blocks: false,

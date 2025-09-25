@@ -13,8 +13,13 @@ pub struct Target(U256);
 
 impl Target {
     /// Creates a new Target from a U256.
-    pub fn new(target: U256) -> Self {
+    pub const fn new(target: U256) -> Self {
         Target(target)
+    }
+
+    /// Returns a Target representing zero.
+    pub const fn zero() -> Self {
+        Target(U256::zero())
     }
 
     /// Computes the difficulty for mining.
