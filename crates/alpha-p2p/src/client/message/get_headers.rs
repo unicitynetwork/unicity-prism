@@ -1,33 +1,115 @@
 use crate::blockdata::block::BlockHash;
 use crate::hashes::Hash;
-use alpha_p2p_derive::ConsensusEncoding;
+use alpha_p2p_derive::ConsensusCodec;
 
-/// Requests an `inv` message that provides block header hashes starting from a particular
+/// Requests an `headers` message that provides block header hashes starting from a particular
 /// point in the blockchain. It allows a peer which has been disconnected or started for the
-/// first time to get the data it needs to request the blocks it hasn't seen.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ConsensusEncoding)]
+/// first time to get the data it needs to request the headers it hasn't seen.
+///
+/// This message is used to synchronize block header information between peers in the Bitcoin
+/// network. The requesting peer sends a list of known block hashes (locators) and a stop hash,
+/// and the responding peer returns headers for blocks starting from the first locator that is
+/// found in the local chain. Up to a maximum of 2000 headers or until the stop hash is reached.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ConsensusCodec)]
 pub struct GetHeaders {
     /// The protocol version number, same as in the version message.
     version: u32,
     /// One or more block header hashes (32 bytes each) in internal byte order. Must be provided
     /// in reverse order of block height. Highest height hashes first.
-    block_header_hashes: Vec<BlockHash>,
+    ///
+    /// These are the locator hashes used to find the starting point in the chain
+    /// where headers should be sent from.
+    hashes: Vec<BlockHash>,
     /// The last block header hash being requested. If none, hash is set to all zeroes which
-    /// will send a maximum of 2,000 hashes.
+    /// will send a maximum of 2,000 headers.
+    ///
+    /// This is used to limit the response size. When set to all zeros, it indicates
+    /// that headers should be sent up to the maximum allowed (2000 headers).
     stop_hash: BlockHash,
 }
 
 impl GetHeaders {
-    pub fn new(
-        version: u32,
-        block_header_hashes: Vec<BlockHash>,
-        stop_hash: Option<BlockHash>,
-    ) -> Self {
+    /// The maximum number of headers that can be requested in a single `getheaders` message.
+    /// This limit is imposed to prevent excessive resource usage and ensure efficient
+    /// synchronization between peers.
+    pub const MAX_HEADERS: usize = 2000;
+
+    /// Creates a new `GetHeaders` message.
+    ///
+    /// # Arguments
+    /// * `version` - The protocol version number, same as in the version message.
+    /// * `hashes` - One or more block header hashes (32 bytes each) in internal byte order.
+    ///   Must be provided in reverse order of block height. Highest height hashes first.
+    /// * `stop_hash` - The last block header hash being requested. If None, the default
+    ///   value (all zeros) is used, which will send a maximum of 2,000 headers.
+    ///
+    /// # Returns
+    /// A new instance of `GetHeaders` message.
+    pub fn new(version: u32, hashes: Vec<BlockHash>, stop_hash: Option<BlockHash>) -> Self {
         Self {
             version,
-            block_header_hashes,
+            hashes,
             stop_hash: stop_hash.unwrap_or_else(BlockHash::all_zeros),
         }
+    }
+
+    /// Gets the protocol version of this message.
+    ///
+    /// The version number is used to ensure compatibility between peers and is
+    /// typically the same as in the version message.
+    ///
+    /// # Returns
+    /// * `u32` - The protocol version number.
+    pub fn version(&self) -> u32 {
+        self.version
+    }
+
+    /// Gets the locator hashes of this message.
+    ///
+    /// These are the block header hashes used to find the starting point in the chain
+    /// where headers should be sent from. The hashes are provided in reverse order of
+    /// block height, with the highest height hashes first.
+    ///
+    /// # Returns
+    /// * `&[BlockHash]` - A slice of block header hashes.
+    pub fn hashes(&self) -> &[BlockHash] {
+        &self.hashes
+    }
+
+    /// Gets the stop hash of this message.
+    ///
+    /// The stop hash indicates the last block header hash being requested. If set to all
+    /// zeroes, it signals that headers should be sent up to the maximum allowed (2000 headers).
+    ///
+    /// # Returns
+    /// * `&BlockHash` - A reference to the stop hash.
+    pub fn stop_hash(&self) -> &BlockHash {
+        &self.stop_hash
+    }
+
+    /// Clears all locator hashes from the request.
+    ///
+    /// This method is useful when reusing a `GetHeaders` message instance
+    /// to avoid carrying over previous locator hashes.
+    pub fn clear_hashes(&mut self) {
+        self.hashes.clear();
+    }
+
+    /// Resets the stop hash to the default value (all zeros).
+    ///
+    /// This method is useful when reusing a `GetHeaders` message instance
+    /// to ensure that the maximum response size (2000 headers) is used.
+    pub fn clear_stop_hash(&mut self) {
+        self.stop_hash = BlockHash::all_zeros();
+    }
+
+    /// Resets all fields of the message to their default values.
+    ///
+    /// This method clears locator hashes and resets the stop hash to
+    /// the default value (all zeros).
+    pub fn clear(&mut self) {
+        self.clear_hashes();
+        self.clear_stop_hash();
     }
 }
 
@@ -88,19 +170,13 @@ mod tests {
         let expected_stop_hash = BlockHash::all_zeros();
 
         assert_eq!(decoded_message.version, expected_version);
-        assert_eq!(decoded_message.block_header_hashes.len(), 2);
+        assert_eq!(decoded_message.hashes.len(), 2);
         assert_eq!(
-            *decoded_message
-                .block_header_hashes
-                .first()
-                .ok_or("Getting hash1")?,
+            *decoded_message.hashes.first().ok_or("Getting hash1")?,
             expected_hash1
         );
         assert_eq!(
-            *decoded_message
-                .block_header_hashes
-                .get(1)
-                .ok_or("Getting hash2")?,
+            *decoded_message.hashes.get(1).ok_or("Getting hash2")?,
             expected_hash2
         );
         assert_eq!(decoded_message.stop_hash, expected_stop_hash);
