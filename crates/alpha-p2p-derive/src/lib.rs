@@ -24,7 +24,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields};
 ///     nonce: u32,
 /// }
 /// ```
-#[proc_macro_derive(ConsensusEncoding)]
+#[proc_macro_derive(ConsensusCodec)]
 pub fn derive_consensus_encoding(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 

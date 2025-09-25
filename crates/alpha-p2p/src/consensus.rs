@@ -1,6 +1,6 @@
 mod params;
 
-pub use alpha_p2p_derive::ConsensusEncoding;
+pub use alpha_p2p_derive::ConsensusCodec;
 pub use encode::{Decodable, Encodable, Error as EncodeDecodeError, VarInt, MAX_VEC_SIZE};
 pub use params::Params;
 
