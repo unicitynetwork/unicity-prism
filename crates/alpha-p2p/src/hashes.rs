@@ -1,1 +1,1 @@
-pub use bitcoin::hashes::{hash_newtype, sha256d, Hash};
+pub use bitcoin::hashes::{Hash, hash_newtype, sha256d};

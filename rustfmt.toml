@@ -1,0 +1,5 @@
+# Increase max width from 80 characters because it's the modern age
+max_width = 100
+
+# Reorder imports alphabetically
+reorder_imports = true

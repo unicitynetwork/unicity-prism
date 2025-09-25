@@ -5,7 +5,7 @@ use crate::consensus::{Decodable, Encodable};
 use crate::hashes::Hash;
 
 /// A list of inventory items for consensus encoding
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct InventoryList(pub Vec<Inventory>);
 
 impl InventoryList {

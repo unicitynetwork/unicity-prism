@@ -1,5 +1,5 @@
-use crate::client::peer::Peer;
 use crate::Network;
+use crate::client::peer::Peer;
 use std::path::PathBuf;
 
 mod message;
