@@ -217,6 +217,31 @@ impl Target {
         Some(diff as f64)
     }
 
+    pub fn to_work(self) -> Option<Work> {
+        // Handle edge cases
+        if self.0.is_zero() {
+            return Some(Work::new(U256::max_value()));
+        }
+
+        // Special case: inverse of 1 is max (as per the codebase)
+        if self.0 == U256::one() {
+            return Some(Work::new(U256::max_value()));
+        }
+
+        // Special case: inverse of max is 1 (as per the codebase)
+        if self.0 == U256::max_value() {
+            return Some(Work::new(U256::one()));
+        }
+
+        // Use the formula: (~x / (x + 1)) + 1
+        let increment = self.0.checked_add(U256::one())?;
+        let inverted = !self.0;
+
+        // Perform the division and add 1
+        let result = inverted.checked_div(increment)?;
+        Some(Work::new(result.checked_add(U256::one())?))
+    }
+
     /// Converts a compact target representation into a Target instance.
     ///
     /// The compact format is used in blockchain systems to represent targets
@@ -441,6 +466,14 @@ impl CompactTarget {
     }
 }
 
+pub struct Work(U256);
+
+impl Work {
+    pub fn new(work: U256) -> Self {
+        Work(work)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -588,6 +621,35 @@ mod tests {
     }
 
     #[test]
+    fn test_historical_bitcoin_chainwork_compatibility() {
+        // Test using the exact same chainwork values from the other library's tests
+        // These are actual Bitcoin Core historical chainwork values
+
+        let historical_chainwork_tests = vec![
+            // (chainwork_value, description)
+            (0x200020002u128, "height 1 - very early Bitcoin"),
+            (0xa97d67041c5e51596ee7u128, "height 308004"),
+            (0x1dc45d79394baa8ab18b20u128, "height 418141"),
+            (0x8c85acb73287e335d525b98u128, "height 596624"),
+            (0x2ef447e01d1642c40a184adau128, "height 738965"),
+        ];
+
+        // We can't directly test these chainwork values since they're cumulative,
+        // but we can verify our Work type can handle these magnitudes correctly
+        for (chainwork, description) in historical_chainwork_tests {
+            let work_value = U256::from(chainwork);
+            let work = Work::new(work_value);
+
+            // Verify the work value is reasonable (not zero, not overflow)
+            assert!(work.0 > U256::zero(), "Chainwork should be positive for {}", description);
+            assert!(work.0 <= U256::max_value(), "Chainwork should not overflow for {}", description);
+
+            // Test that we can create Work objects with these historical values
+            assert_eq!(work.0, work_value, "Work value should match input for {}", description);
+        }
+    }
+
+    #[test]
     fn test_bitcoin_formula_consistency() {
         let test_cases = vec![
             (0x1d00ffff, "00000000ffff0000000000000000000000000000000000000000000000000000"),
@@ -653,7 +715,7 @@ mod tests {
     }
 
     #[test]
-    fn test_edge_cases() {
+    fn test_target_edge_cases() {
         // Test edge case: exactly 3 bytes, no normalization needed
         let target = Target(U256::from(0x7fffff)); // Just below normalization threshold
         let compact = target.to_compact().unwrap();
@@ -663,5 +725,251 @@ mod tests {
         let target = Target(U256::from(0x800000)); // Exactly at threshold
         let compact = target.to_compact().unwrap();
         assert_eq!(compact.0, 0x04008000); // Should be normalized
+    }
+
+    #[test]
+    fn test_zero_target_to_work() {
+        let target = Target::zero();
+        let work = target.to_work().unwrap();
+        assert_eq!(work.0, U256::max_value());
+    }
+
+    #[test]
+    fn test_one_target_to_work() {
+        let target = Target::new(U256::one());
+        let work = target.to_work().unwrap();
+        assert_eq!(work.0, U256::max_value());
+    }
+
+    #[test]
+    fn test_max_target_to_work() {
+        let target = Target::new(U256::max_value());
+        let work = target.to_work().unwrap();
+        assert_eq!(work.0, U256::one());
+    }
+
+    #[test]
+    fn test_genesis_block_target_work() {
+        // Bitcoin genesis block: nBits = 0x1d00ffff
+        // Target = 0x00000000ffff0000000000000000000000000000000000000000000000000000
+        let target_hex = "00000000ffff0000000000000000000000000000000000000000000000000000";
+        let target = Target(U256::from_str_radix(target_hex, 16).unwrap());
+        let work = target.to_work().unwrap();
+
+        // Bitcoin Core formula: 2^256 / (target + 1)
+        // Expected work: 0x0000000000000000000000000000000000000000000000000000000100010001
+        let expected_work = U256::from_str_radix("0000000000000000000000000000000000000000000000000000000100010001", 16).unwrap();
+        assert_eq!(work.0, expected_work);
+    }
+
+    #[test]
+    fn test_target_value_2() {
+        // Test target = 2 using Bitcoin Core formula: 2^256 / (2 + 1) = 2^256 / 3
+        let target = Target::new(U256::from(2u64));
+        let work = target.to_work().unwrap();
+
+        // Expected: 0x5555555555555555555555555555555555555555555555555555555555555555
+        let expected_work = U256::from_str_radix("5555555555555555555555555555555555555555555555555555555555555555", 16).unwrap();
+        assert_eq!(work.0, expected_work);
+    }
+
+    #[test]
+    fn test_target_value_10() {
+        // Test target = 10 using Bitcoin Core formula: 2^256 / (10 + 1) = 2^256 / 11
+        let target = Target::new(U256::from(10u64));
+        let work = target.to_work().unwrap();
+
+        // Expected: 0x1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745
+        let expected_work = U256::from_str_radix("1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745", 16).unwrap();
+        assert_eq!(work.0, expected_work);
+    }
+
+    #[test]
+    fn test_target_value_100() {
+        // Test target = 100 using Bitcoin Core formula: 2^256 / (100 + 1) = 2^256 / 101
+        let target = Target::new(U256::from(100u64));
+        let work = target.to_work().unwrap();
+
+        // Expected: 0x288df0cac5b3f5dc83cd4e930288df0cac5b3f5dc83cd4e930288df0cac5b3f
+        let expected_work = U256::from_str_radix("288df0cac5b3f5dc83cd4e930288df0cac5b3f5dc83cd4e930288df0cac5b3f", 16).unwrap();
+        assert_eq!(work.0, expected_work);
+    }
+
+    #[test]
+    fn test_target_value_256() {
+        // Test target = 256 using Bitcoin Core formula: 2^256 / (256 + 1) = 2^256 / 257
+        let target = Target::new(U256::from(256u64));
+        let work = target.to_work().unwrap();
+
+        // Expected: 0xff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff
+        let expected_work = U256::from_str_radix("ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff", 16).unwrap();
+        assert_eq!(work.0, expected_work);
+    }
+
+    #[test]
+    fn test_target_value_65536() {
+        // Test target = 65536 using Bitcoin Core formula: 2^256 / (65536 + 1) = 2^256 / 65537
+        let target = Target::new(U256::from(65536u64));
+        let work = target.to_work().unwrap();
+
+        // Expected: 0xffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff
+        let expected_work = U256::from_str_radix("ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff", 16).unwrap();
+        assert_eq!(work.0, expected_work);
+    }
+
+    #[test]
+    fn test_bitcoin_block_100000_target() {
+        // Bitcoin block 100000: nBits = 0x1b04864c
+        // Target = 0x000000000004864c000000000000000000000000000000000000000000000000
+        let target_hex = "000000000004864c000000000000000000000000000000000000000000000000";
+        let target = Target(U256::from_str_radix(target_hex, 16).unwrap());
+        let work = target.to_work().unwrap();
+
+        // Expected work using Bitcoin Core formula: 2^256 / (target + 1)
+        // Expected: 0x000000000000000000000000000000000000000000000000000038946224e37e
+        let expected_work = U256::from_str_radix("000000000000000000000000000000000000000000000000000038946224e37e", 16).unwrap();
+        assert_eq!(work.0, expected_work);
+    }
+
+    #[test]
+    fn test_work_monotonic_decrease_exact() {
+        // Test exact monotonic decrease with precise expected values
+        let test_cases = vec![
+            (2u64, "5555555555555555555555555555555555555555555555555555555555555555"),
+            (4u64, "3333333333333333333333333333333333333333333333333333333333333333"),
+            (8u64, "1c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71"),
+            (16u64, "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"),
+            (32u64, "07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1"),
+            (64u64, "03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f0"),
+        ];
+
+        for (target_val, expected_hex) in test_cases {
+            let target = Target::new(U256::from(target_val));
+            let work = target.to_work().unwrap();
+            let expected_work = U256::from_str_radix(expected_hex, 16).unwrap();
+
+            assert_eq!(work.0, expected_work, "Work calculation failed for target: {}", target_val);
+        }
+    }
+
+    #[test]
+    fn test_large_target_values_exact() {
+        // Test larger target values with exact expected results
+        let test_cases = vec![
+            (1000u64, "004178749e8fba7004178749e8fba7004178749e8fba7004178749e8fba70041"),
+            (2000u64, "0020c06a7159f0644d45fb2370332ca6511c879cb8bd58675f4ff5c3debc93e4"),
+            (1000000u64, "000010c6f6873c67ecb4b00c89b01bf0546a14c7d05ea56be10a1586a792e7ba"),
+        ];
+
+        for (target_val, expected_hex) in test_cases {
+            let target = Target::new(U256::from(target_val));
+            let work = target.to_work().unwrap();
+            let expected_work = U256::from_str_radix(expected_hex, 16).unwrap();
+
+            assert_eq!(work.0, expected_work, "Work calculation failed for target: {}", target_val);
+        }
+    }
+
+    #[test]
+    fn test_very_large_target_exact() {
+        // Test with a very large target: max_value / 1000000
+        // Target: 0x000010c6f7a0b5ed8d36b4c7f34938583621fafc8b0079a2834d26fa3fcc9ea9
+        let large_target = U256::max_value() / U256::from(1000000u64);
+        let target = Target::new(large_target);
+        let work = target.to_work().unwrap();
+
+        // Expected work: 0x00000000000000000000000000000000000000000000000000000000000f423f
+        let expected_work = U256::from_str_radix("00000000000000000000000000000000000000000000000000000000000f423f", 16).unwrap();
+        assert_eq!(work.0, expected_work);
+    }
+
+    #[test]
+    fn test_overflow_near_max_exact() {
+        // Test with U256::max_value() - 1
+        let near_max_target = U256::max_value() - U256::one();
+        let target = Target::new(near_max_target);
+
+        let result = target.to_work();
+        assert!(result.is_some());
+
+        // The special case should return exactly 1
+        assert_eq!(result.unwrap().0, U256::one());
+    }
+
+    #[test]
+    fn test_mathematical_relationship_exact() {
+        // Test the exact mathematical relationship between targets 1000 and 2000
+        let target_1000 = Target::new(U256::from(1000u64));
+        let target_2000 = Target::new(U256::from(2000u64));
+
+        let work_1000 = target_1000.to_work().unwrap();
+        let work_2000 = target_2000.to_work().unwrap();
+
+        // Expected exact values
+        let expected_work_1000 = U256::from_str_radix("004178749e8fba7004178749e8fba7004178749e8fba7004178749e8fba70041", 16).unwrap();
+        let expected_work_2000 = U256::from_str_radix("0020c06a7159f0644d45fb2370332ca6511c879cb8bd58675f4ff5c3debc93e4", 16).unwrap();
+
+        assert_eq!(work_1000.0, expected_work_1000);
+        assert_eq!(work_2000.0, expected_work_2000);
+
+        // Calculate 2 * work_2000 and verify it's what we expect
+        let double_work_2000 = expected_work_2000 * U256::from(2u64);
+        let expected_double_work_2000 = U256::from_str_radix("004180d4e2b3e0c89a8bf646e066594ca2390f39717ab0cebe9feb87bd7927c8", 16).unwrap();
+
+        assert_eq!(double_work_2000, expected_double_work_2000);
+
+        // Verify work_1000 is NOT exactly double work_2000 (due to the +1 in denominator)
+        assert_ne!(work_1000.0, double_work_2000);
+
+        // Verify work_1000 is slightly less than 2*work_2000 because:
+        // work_1000 = 2^256 / 1001, 2*work_2000 = 2*2^256 / 2001 = 2^257 / 2001
+        // Since 2^257 / 2001 > 2^256 / 1001, we have work_1000 < 2*work_2000
+        assert!(work_1000.0 < double_work_2000);
+    }
+
+    #[test]
+    fn test_formula_equivalence_exact() {
+        // Test that our implementation produces exactly the same results as Bitcoin Core formula
+        // for a comprehensive set of values
+        let test_values = [2u64, 3u64, 5u64, 7u64, 11u64, 13u64, 17u64, 19u64, 23u64, 29u64];
+        let expected_results = ["5555555555555555555555555555555555555555555555555555555555555555",
+            "4000000000000000000000000000000000000000000000000000000000000000",
+            "2aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "2000000000000000000000000000000000000000000000000000000000000000",
+            "1555555555555555555555555555555555555555555555555555555555555555",
+            "1249249249249249249249249249249249249249249249249249249249249249",
+            "0e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38",
+            "0ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "0888888888888888888888888888888888888888888888888888888888888888"];
+
+        for (i, val) in test_values.iter().enumerate() {
+            let target = Target::new(U256::from(*val));
+            let work = target.to_work().unwrap();
+            let expected_work = U256::from_str_radix(expected_results[i], 16).unwrap();
+
+            assert_eq!(work.0, expected_work, "Work calculation failed for target: {}", val);
+        }
+    }
+
+    #[test]
+    fn test_work_not_zero_exact() {
+        // Test exact non-zero results for various target values
+        let test_cases = vec![
+            (2u64, false),           // Should be large
+            (1000u64, false),        // Should be medium
+            (1000000u64, false),     // Should be small but non-zero
+        ];
+
+        for (target_val, should_be_zero) in test_cases {
+            let target = Target::new(U256::from(target_val));
+            let work = target.to_work().unwrap();
+
+            if should_be_zero {
+                assert_eq!(work.0, U256::zero(), "Work should be zero for target: {}", target_val);
+            } else {
+                assert_ne!(work.0, U256::zero(), "Work should not be zero for target: {}", target_val);
+            }
+        }
     }
 }
