@@ -14,9 +14,11 @@ readme.workspace = true
 alpha-p2p-derive = { path = "../alpha-p2p-derive" }
 bitcoin = { version = "0.32.7", features = ["base64", "rand", "serde"] }
 bitcoin-units = "0.2.0"
+chrono.workspace = true
 clap = { version = "4.5.40", features = ["derive"] }
 directories.workspace = true
 tokio.workspace = true
+rand.workspace = true
 sha2.workspace = true
 serde.workspace = true
 thiserror.workspace = true

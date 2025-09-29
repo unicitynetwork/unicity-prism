@@ -1,4 +1,4 @@
-#![cfg_attr(test, allow(clippy::integer_arithmetic))]
+#![cfg_attr(test, allow(clippy::arithmetic_side_effects))]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![cfg_attr(test, allow(clippy::expect_used))]
 #![cfg_attr(test, allow(clippy::arithmetic_side_effects))]

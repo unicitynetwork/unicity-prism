@@ -1,3 +1,40 @@
+//! Module for handling inventory vectors in Bitcoin P2P consensus messages.
+//!
+//! This module defines the `Inventory` enum, which represents different types of inventory
+//! items that can be advertised or requested between peers. It is used in network messages
+//! such as `inv` and `getdata`.
+//!
+//! ## Inventory Types
+//!
+//! Each variant includes a 4-byte `inv_type` field and a 32-byte hash. The supported types are:
+//!
+//! - `Transaction`: A plain transaction (Txid).
+//! - `Block`: A full block header.
+//! - `FilteredBlock`: A block header requested as a `merkleblock` (requires bloom filter).
+//! - `CompactBlock`: A block header requested as a `cmpctblock`.
+//! - `WitnessTransaction`: A transaction that includes witness data.
+//! - `WitnessBlock`: A block that includes witness data in its transactions.
+//! - `FilteredWitnessBlock`: Reserved for future use.
+//! - `Unknown`: A fallback for unrecognized inventory types.
+//!
+//! ## Encoding Format
+//!
+//! The consensus encoding format serializes each `Inventory` item as:
+//!
+//! - A 4-byte little-endian `inv_type`.
+//! - A 32-byte hash.
+//!
+//! ## Usage
+//!
+//! The `Inventory` enum is primarily used in message handling logic to:
+//!
+//! - Advertise known blocks or transactions (`inv` message).
+//! - Request missing data (`getdata` message).
+//! - Support modern P2P features like witness and compact blocks.
+//!
+//! # Errors
+//!
+//! The `consensus_decode` implementation propagates parsing errors, such as malformed data.
 use crate::blockdata::block::BlockHash;
 use crate::blockdata::transaction::Txid;
 use crate::consensus::encode::VarInt;
@@ -9,31 +46,120 @@ use crate::hashes::Hash;
 pub(crate) struct InventoryList(pub Vec<Inventory>);
 
 impl InventoryList {
-    /// Creates a new `InventoryList` from a vector of `Inventory` items.
+    /// Constructs a new `InventoryList` from the given vector of `Inventory` items.
     pub fn new(inventories: Vec<Inventory>) -> Self {
         Self(inventories)
     }
 
-    /// Consumes the `InventoryList` and returns the underlying vector of `Inventory` items.
+    /// Returns the number of inventory items contained in the list.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns `true` if the list contains no inventory items.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Removes all inventory items from the list, resetting its length to zero.
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    /// Returns a reference to the first inventory item, or `None` if the list is empty.
+    pub fn first(&self) -> Option<&Inventory> {
+        self.0.first()
+    }
+
+    /// Returns a reference to the last inventory item, or `None` if the list is empty.
+    pub fn last(&self) -> Option<&Inventory> {
+        self.0.last()
+    }
+
+    /// Returns a mutable reference to the first inventory item, or `None` if the list is empty.
+    pub fn first_mut(&mut self) -> Option<&mut Inventory> {
+        self.0.first_mut()
+    }
+
+    /// Returns a mutable reference to the last inventory item, or `None` if the list is empty.
+    pub fn last_mut(&mut self) -> Option<&mut Inventory> {
+        self.0.last_mut()
+    }
+
+    /// Appends an `Inventory` item to the end of the list.
+    pub fn push(&mut self, inventory: Inventory) {
+        self.0.push(inventory);
+    }
+
+    /// Removes and returns the last `Inventory` item, or `None` if the list is empty.
+    pub fn pop(&mut self) -> Option<Inventory> {
+        self.0.pop()
+    }
+
+    /// Inserts an `Inventory` item at the specified index, shifting all subsequent elements to the right.
+    pub fn insert(&mut self, index: usize, inventory: Inventory) {
+        self.0.insert(index, inventory);
+    }
+
+    /// Removes and returns the `Inventory` item at the specified index, shifting all subsequent elements to the left.
+    pub fn remove(&mut self, index: usize) -> Inventory {
+        self.0.remove(index)
+    }
+
+    /// Returns an immutable iterator over the `Inventory` items in the list.
+    pub fn iter(&self) -> std::slice::Iter<'_, Inventory> {
+        self.0.iter()
+    }
+
+    /// Returns a mutable iterator over the `Inventory` items in the list.
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, Inventory> {
+        self.0.iter_mut()
+    }
+
+    /// Consumes the `InventoryList`, returning the underlying vector of `Inventory` items.
     pub fn into_vec(self) -> Vec<Inventory> {
         self.0
     }
 
-    /// Returns a slice of the underlying vector of `Inventory` items.
+    /// Returns a slice view of the underlying vector of `Inventory` items.
     pub fn as_slice(&self) -> &[Inventory] {
         &self.0
     }
 }
 
 impl From<Vec<Inventory>> for InventoryList {
-    fn from(vec: Vec<Inventory>) -> Self {
-        Self(vec)
+    fn from(inventories: Vec<Inventory>) -> Self {
+        Self::new(inventories)
     }
 }
 
-impl From<InventoryList> for Vec<Inventory> {
-    fn from(list: InventoryList) -> Self {
-        list.0
+impl IntoIterator for InventoryList {
+    type Item = Inventory;
+    type IntoIter = std::vec::IntoIter<Inventory>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a InventoryList {
+    type Item = &'a Inventory;
+    type IntoIter = std::slice::Iter<'a, Inventory>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl FromIterator<Inventory> for InventoryList {
+    fn from_iter<I: IntoIterator<Item=Inventory>>(iter: I) -> Self {
+        Self::new(iter.into_iter().collect())
+    }
+}
+
+impl Extend<Inventory> for InventoryList {
+    fn extend<I: IntoIterator<Item=Inventory>>(&mut self, iter: I) {
+        self.0.extend(iter);
     }
 }
 
