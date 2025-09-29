@@ -34,13 +34,13 @@ pub enum Connection {
     SendHeaders,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
     /// Request for blocks or transactions.
     GetHeaders(GetHeaders),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Response {
     /// Advertise new blocks or transactions.
     Headers,
