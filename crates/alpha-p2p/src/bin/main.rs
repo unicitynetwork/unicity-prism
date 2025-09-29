@@ -11,38 +11,39 @@ use tracing_subscriber::{EnvFilter, Registry};
 
 #[derive(Parser)]
 #[command(name = "Unicity PoW Migrator")]
-#[command(about = "A lightweight peer for the Unicity PoW network, which helps to migrate UTXOs from PoW to Prism.", long_about = None)]
+#[command(about = "A lightweight peer for the Unicity PoW network, which helps to migrate UTXOs from PoW to Prism.", long_about = None
+)]
 struct Args {
     /// Connect to specific peers.
-    #[arg(option, short = 'c', long = "connect")]
-    pub connect: Vec<net::SocketAddr>,
+    #[arg(short = 'c', long = "connect")]
+    pub connect: Option<Vec<net::SocketAddr>>,
 
     /// Listen for incoming connections on the specified address/port.
-    #[arg(option, short = 'l', long = "listen")]
-    pub listen: Vec<net::SocketAddr>,
+    #[arg(short = 'l', long = "listen")]
+    pub listen: Option<Vec<net::SocketAddr>>,
 
     /// Use the specified network (mainnet, testnet, regtest).
     #[arg(short, long, default_value = "testnet")]
     pub network: Network,
 
     /// Only connect to IPv4 peers.
-    #[arg(long, conflicts_with = "ipv6_only", default_value = "false")]
+    #[arg(long, conflicts_with = "ipv6_only", default_value_t = false)]
     pub ipv4_only: bool,
 
     /// Only connect to IPv6 peers.
-    #[arg(long, conflicts_with = "ipv4_only", default_value = "false")]
+    #[arg(long, conflicts_with = "ipv4_only", default_value_t = false)]
     pub ipv6_only: bool,
 
     /// Prefer IPv6 connections when both IPv4 and IPv6 are available.
-    #[arg(long, default_value = "false")]
+    #[arg(long, default_value_t = false)]
     pub prefer_ipv6: bool,
 
     /// Maximum number of connections to maintain.
-    #[arg(default_value = 8)]
+    #[arg(long, default_value_t = 8)]
     pub max_connections: usize,
 
     /// Only connect to the specified peers and do not accept incoming connections.
-    #[arg(default_value = false)]
+    #[arg(long, default_value_t = false)]
     pub connect_only: bool,
 
     /// Directory to store data.
@@ -50,19 +51,20 @@ struct Args {
     pub datadir: Option<PathBuf>,
 
     /// Enable verbose logging.
-    #[arg(short, long, default_value = "false")]
+    #[arg(short, long, default_value_t = false)]
     pub verbose: bool,
 
     /// Log level (error, warn, info, debug, trace).
-    #[arg(long, default_value_t = tracing::Level::INFO, value_parser = ["error", "warn", "info", "debug", "trace"])]
+    #[arg(long, default_value_t = tracing::Level::INFO, value_parser = ["error", "warn", "info", "debug", "trace"]
+    )]
     pub log_level: tracing::Level,
 
     /// Start syncing from the specified block height.
-    #[arg(long, default_value = 0)]
+    #[arg(long, default_value_t = 0)]
     pub start_height: u32,
 
     /// Number of blocks to sync before exiting (0 means sync indefinitely).
-    #[arg(long, default_value = 0)]
+    #[arg(long, default_value_t = 0)]
     pub max_blocks: u32,
 
     /// User agent string to identify the client.
@@ -70,11 +72,11 @@ struct Args {
     pub user_agent: String,
 
     /// Disable DNS seed lookups.
-    #[arg(long, default_value = false)]
+    #[arg(long, default_value_t = false)]
     pub no_dns_seeds: bool,
 
     /// Disable colored output.
-    #[arg(long, default_value = false)]
+    #[arg(long, default_value_t = false)]
     pub no_color: bool,
 }
 
@@ -149,7 +151,7 @@ fn init_tracing(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
 
     subscriber.try_init()?;
 
-    debug!("Starting Prism Migrator with level: {}", level);
+    debug!("Starting Prism Migrator with level: {}", args.log_level);
 
     Ok(())
 }
