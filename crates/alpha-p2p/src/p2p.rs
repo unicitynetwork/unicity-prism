@@ -1,4 +1,4 @@
-mod address;
+pub(crate) mod address;
 pub mod message;
 
 use crate::consensus::Params;
