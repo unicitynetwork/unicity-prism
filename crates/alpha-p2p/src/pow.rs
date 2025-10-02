@@ -445,6 +445,12 @@ impl Target {
     }
 }
 
+impl From<BitcoinTarget> for Target {
+    fn from(value: BitcoinTarget) -> Self {
+        Target::from_big_endian(&value.to_be_bytes())
+    }
+}
+
 impl From<Target> for BitcoinTarget {
     fn from(value: Target) -> Self {
         // Convert to compact format first

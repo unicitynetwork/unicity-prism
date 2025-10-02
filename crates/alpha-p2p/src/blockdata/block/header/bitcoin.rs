@@ -59,7 +59,7 @@ impl Header for BitcoinHeader {
     /// * `Some(Target)` - The converted target value
     /// * `None` - Never returns None for Bitcoin headers as they always have a valid target
     fn target(&self) -> Option<Target> {
-        Some(Target::from_bytes(&self.0.target().to_be_bytes()))
+        Some(self.0.target().into())
     }
 
     /// Validates the proof of work against the required target.
