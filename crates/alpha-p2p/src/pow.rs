@@ -10,6 +10,7 @@
 use alpha_p2p_derive::ConsensusCodec;
 use primitive_types::U256;
 use serde::{Deserialize, Serialize};
+use bitcoin::Target as BitcoinTarget;;
 
 /// Represents a target value expressed as an unsigned 256-bit integer.
 ///
@@ -111,7 +112,7 @@ impl Target {
     /// # assert_eq!(target.0, primitive_types::U256::from(1u128));
     /// ```
     /// Creates a Target from bytes (big-endian).
-    pub fn from_bytes(bytes: &[u8; 32]) -> Self {
+    pub fn from_big_endian(bytes: &[u8; 32]) -> Self {
         Self(U256::from_big_endian(bytes))
     }
 
@@ -432,6 +433,22 @@ impl Target {
         let compact = size_shifted.checked_add(final_mantissa)?;
 
         Some(CompactTarget(compact))
+    }
+
+    /// Converts the Target to its big-endian byte representation.
+    ///
+    /// # Returns
+    ///
+    /// * `[u8; 32]` - A 32-byte array containing the big-endian representation of the target.
+    fn to_big_endian(self) -> [u8; 32] {
+        self.0.to_big_endian()
+    }
+}
+
+impl From<Target> for BitcoinTarget {
+    fn from(value: Target) -> Self {
+        // Convert to compact format first
+        BitcoinTarget::from_be_bytes(value.to_big_endian())
     }
 }
 
