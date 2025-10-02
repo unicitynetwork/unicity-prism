@@ -19,6 +19,9 @@ pub mod inventory;
 mod request;
 mod response;
 
+use crate::blockdata::block::{Block, Header};
+use crate::client::message::response::{Headers, NotFound, Tx};
+use alpha_p2p_derive::ConsensusCodec;
 pub use connection::{Ping, Pong, VerAck, Version};
 pub use request::GetHeaders;
 
@@ -27,27 +30,8 @@ pub use request::GetHeaders;
 /// This enum represents all possible types of messages that can be sent or received
 /// in the Bitcoin P2P network. Each variant contains a specific type of message,
 /// allowing for proper handling and dispatching of messages throughout the network.
-///
-/// # Usage Example
-///
-/// ```rust
-/// use alpha_p2p::client::message::{Message, Connection, Request, Response};
-///
-/// // Create a connection message
-/// let version_msg = Message::Connection(Connection::Version(version));
-///
-/// // Create a request message
-/// let get_headers_msg = Message::Request(Request::GetHeaders(get_headers));
-///
-/// // Match on message types
-/// match message {
-///     Message::Connection(conn) => handle_connection_message(conn),
-///     Message::Request(req) => handle_request_message(req),
-///     Message::Response(resp) => handle_response_message(resp),
-/// }
-/// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Message {
+#[derive(Debug, Clone, PartialEq, Eq, ConsensusCodec)]
+pub enum Message<H: Header> {
     /// Protocol-level messages used for establishing and maintaining connections.
     ///
     /// These include handshake messages, acknowledgments, and keep-alive communications
@@ -64,14 +48,14 @@ pub enum Message {
     ///
     /// These are incoming responses that contain the requested data or error
     /// information from other nodes in response to requests made by this client.
-    Response(Response),
+    Response(Response<H>),
 }
 
 /// Connection-level messages used for establishing and maintaining peer connections.
 ///
 /// These messages are part of the Bitcoin P2P protocol handshake and connection management,
 /// including version negotiation, acknowledgments, and keep-alive communication.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, ConsensusCodec)]
 pub enum Connection {
     /// Initial handshake message - sent to introduce this node to a peer.
     ///
@@ -99,12 +83,6 @@ pub enum Connection {
     /// This is the standard response to keep-alive messages, confirming that
     /// this node is still active and responsive.
     Pong(Pong),
-
-    /// Advertise new blocks or transactions to peers.
-    ///
-    /// This message is sent when the node wants to announce that it has
-    /// new headers available for synchronization.
-    SendHeaders,
 }
 
 /// Request messages sent from this client to other peers in the network.
@@ -112,7 +90,7 @@ pub enum Connection {
 /// These are outgoing requests that ask for specific data from other nodes,
 /// such as headers, blocks, or transactions. The client only sends requests
 /// and does not relay data to other peers.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, ConsensusCodec)]
 pub enum Request {
     /// Request for blocks or transactions.
     ///
@@ -126,30 +104,104 @@ pub enum Request {
 ///
 /// These are incoming responses to requests made by this client, containing
 /// the requested data or error information from other nodes.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Response {
+#[derive(Debug, Clone, PartialEq, Eq, ConsensusCodec)]
+pub enum Response<H: Header> {
     /// Advertise new blocks or transactions.
     ///
     /// This response contains headers of blocks that are available for synchronization,
     /// allowing the requesting node to update its view of the blockchain.
-    Headers,
+    Headers(Headers<H>),
 
     /// Full block data.
     ///
     /// This response contains complete, serialized block data that includes
     /// the full block header and all transactions in the block.
-    Block,
+    Block(Block<H>),
 
     /// Full transaction data.
     ///
     /// This response contains complete, serialized transaction data that can be
     /// used to reconstruct the full transaction information.
-    Tx,
+    Tx(Tx),
 
     /// Requested data not found.
     ///
     /// This response indicates that the requested data (block, transaction, etc.)
     /// was not found on this peer. This may occur when the requested data is
     /// unknown to the node or has already been pruned from the local storage.
-    NotFound,
+    NotFound(NotFound),
+}
+
+// From trait implementations for convenient conversions
+
+impl<H: Header> From<Connection> for Message<H> {
+    fn from(msg: Connection) -> Self {
+        Message::Connection(msg)
+    }
+}
+
+impl<H: Header> From<Request> for Message<H> {
+    fn from(msg: Request) -> Self {
+        Message::Request(msg)
+    }
+}
+
+impl<H: Header> From<Response<H>> for Message<H> {
+    fn from(msg: Response<H>) -> Self {
+        Message::Response(msg)
+    }
+}
+
+impl From<Version> for Connection {
+    fn from(msg: Version) -> Self {
+        Connection::Version(msg)
+    }
+}
+
+impl From<VerAck> for Connection {
+    fn from(msg: VerAck) -> Self {
+        Connection::VerAck(msg)
+    }
+}
+
+impl From<Ping> for Connection {
+    fn from(msg: Ping) -> Self {
+        Connection::Ping(msg)
+    }
+}
+
+impl From<Pong> for Connection {
+    fn from(msg: Pong) -> Self {
+        Connection::Pong(msg)
+    }
+}
+
+impl From<GetHeaders> for Request {
+    fn from(msg: GetHeaders) -> Self {
+        Request::GetHeaders(msg)
+    }
+}
+
+impl<H: Header> From<Headers<H>> for Response<H> {
+    fn from(msg: Headers<H>) -> Self {
+        Response::Headers(msg)
+    }
+}
+
+impl<H: Header> From<Block<H>> for Response<H> {
+    fn from(msg: Block<H>) -> Self {
+        Response::Block(msg)
+    }
+}
+
+impl<H: Header> From<Tx> for Response<H> {
+    fn from(msg: Tx) -> Self {
+        Response::Tx(msg)
+    }
+}
+
+impl<H: Header> From<NotFound> for Response<H> {
+    fn from(msg: NotFound) -> Self {
+        Response::NotFound(msg)
+    }
 }
