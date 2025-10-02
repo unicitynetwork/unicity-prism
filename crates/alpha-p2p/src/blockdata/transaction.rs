@@ -1,1 +1,1 @@
-pub use bitcoin::blockdata::transaction::{OutPoint, Transaction, TxIn, Txid, Wtxid};
+pub use bitcoin::blockdata::transaction::{OutPoint, Transaction, TxIn, Txid, Version, Wtxid};
