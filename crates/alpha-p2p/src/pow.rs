@@ -307,7 +307,10 @@ impl Target {
 
         let base = U256::from(mantissa);
 
-        #[allow(clippy::arithmetic_side_effects, reason = "Checked U256 shift handle overflows")]
+        #[allow(
+            clippy::arithmetic_side_effects,
+            reason = "Checked U256 shift handle overflows"
+        )]
         let target = if exponent <= 3 {
             let shift_bits = 3u32.checked_sub(exponent)?.checked_mul(8)?;
             if shift_bits >= 256 {
@@ -446,23 +449,19 @@ impl Target {
 /// # assert_eq!(compact_zero.0, 0x000000);
 /// ```
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-    ConsensusCodec,
+    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ConsensusCodec,
 )]
 pub struct CompactTarget(u32);
 
 impl CompactTarget {
     pub fn new(target: u32) -> Self {
         CompactTarget(target)
+    }
+}
+
+impl From<Target> for Option<CompactTarget> {
+    fn from(value: Target) -> Self {
+        value.to_compact()
     }
 }
 
@@ -641,27 +640,47 @@ mod tests {
             let work = Work::new(work_value);
 
             // Verify the work value is reasonable (not zero, not overflow)
-            assert!(work.0 > U256::zero(), "Chainwork should be positive for {}", description);
-            assert!(work.0 <= U256::max_value(), "Chainwork should not overflow for {}", description);
+            assert!(
+                work.0 > U256::zero(),
+                "Chainwork should be positive for {}",
+                description
+            );
+            assert!(
+                work.0 <= U256::max_value(),
+                "Chainwork should not overflow for {}",
+                description
+            );
 
             // Test that we can create Work objects with these historical values
-            assert_eq!(work.0, work_value, "Work value should match input for {}", description);
+            assert_eq!(
+                work.0, work_value,
+                "Work value should match input for {}",
+                description
+            );
         }
     }
 
     #[test]
     fn test_bitcoin_formula_consistency() {
         let test_cases = vec![
-            (0x1d00ffff, "00000000ffff0000000000000000000000000000000000000000000000000000"),
-            (0x1b04864c, "0000000004864c000000000000000000000000000000000000000000000000"),
+            (
+                0x1d00ffff,
+                "00000000ffff0000000000000000000000000000000000000000000000000000",
+            ),
+            (
+                0x1b04864c,
+                "0000000004864c000000000000000000000000000000000000000000000000",
+            ),
         ];
 
         for (expected_compact, target_hex) in test_cases {
             let target = Target(U256::from_str_radix(target_hex, 16).unwrap());
             let compact = target.to_compact().unwrap();
-            assert_eq!(compact.0, expected_compact,
-                       "Failed for target {}: expected 0x{:08x}, got 0x{:08x}",
-                       target_hex, expected_compact, compact.0);
+            assert_eq!(
+                compact.0, expected_compact,
+                "Failed for target {}: expected 0x{:08x}, got 0x{:08x}",
+                target_hex, expected_compact, compact.0
+            );
 
             // Verify the reverse calculation
             let coefficient = compact.0 & 0xffffff;
@@ -682,7 +701,11 @@ mod tests {
             U256::from(0x1234),
             U256::from(0x123456),
             U256::from(0x12345678u64),
-            U256::from_str_radix("00000000ffff0000000000000000000000000000000000000000000000000000", 16).unwrap(),
+            U256::from_str_radix(
+                "00000000ffff0000000000000000000000000000000000000000000000000000",
+                16,
+            )
+            .unwrap(),
         ];
 
         for original_target in test_targets {
@@ -758,7 +781,11 @@ mod tests {
 
         // Bitcoin Core formula: 2^256 / (target + 1)
         // Expected work: 0x0000000000000000000000000000000000000000000000000000000100010001
-        let expected_work = U256::from_str_radix("0000000000000000000000000000000000000000000000000000000100010001", 16).unwrap();
+        let expected_work = U256::from_str_radix(
+            "0000000000000000000000000000000000000000000000000000000100010001",
+            16,
+        )
+        .unwrap();
         assert_eq!(work.0, expected_work);
     }
 
@@ -769,7 +796,11 @@ mod tests {
         let work = target.to_work().unwrap();
 
         // Expected: 0x5555555555555555555555555555555555555555555555555555555555555555
-        let expected_work = U256::from_str_radix("5555555555555555555555555555555555555555555555555555555555555555", 16).unwrap();
+        let expected_work = U256::from_str_radix(
+            "5555555555555555555555555555555555555555555555555555555555555555",
+            16,
+        )
+        .unwrap();
         assert_eq!(work.0, expected_work);
     }
 
@@ -780,7 +811,11 @@ mod tests {
         let work = target.to_work().unwrap();
 
         // Expected: 0x1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745
-        let expected_work = U256::from_str_radix("1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745", 16).unwrap();
+        let expected_work = U256::from_str_radix(
+            "1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745d1745",
+            16,
+        )
+        .unwrap();
         assert_eq!(work.0, expected_work);
     }
 
@@ -791,7 +826,11 @@ mod tests {
         let work = target.to_work().unwrap();
 
         // Expected: 0x288df0cac5b3f5dc83cd4e930288df0cac5b3f5dc83cd4e930288df0cac5b3f
-        let expected_work = U256::from_str_radix("288df0cac5b3f5dc83cd4e930288df0cac5b3f5dc83cd4e930288df0cac5b3f", 16).unwrap();
+        let expected_work = U256::from_str_radix(
+            "288df0cac5b3f5dc83cd4e930288df0cac5b3f5dc83cd4e930288df0cac5b3f",
+            16,
+        )
+        .unwrap();
         assert_eq!(work.0, expected_work);
     }
 
@@ -802,7 +841,11 @@ mod tests {
         let work = target.to_work().unwrap();
 
         // Expected: 0xff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff
-        let expected_work = U256::from_str_radix("ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff", 16).unwrap();
+        let expected_work = U256::from_str_radix(
+            "ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff",
+            16,
+        )
+        .unwrap();
         assert_eq!(work.0, expected_work);
     }
 
@@ -813,7 +856,11 @@ mod tests {
         let work = target.to_work().unwrap();
 
         // Expected: 0xffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff
-        let expected_work = U256::from_str_radix("ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff", 16).unwrap();
+        let expected_work = U256::from_str_radix(
+            "ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff",
+            16,
+        )
+        .unwrap();
         assert_eq!(work.0, expected_work);
     }
 
@@ -827,7 +874,11 @@ mod tests {
 
         // Expected work using Bitcoin Core formula: 2^256 / (target + 1)
         // Expected: 0x000000000000000000000000000000000000000000000000000038946224e37e
-        let expected_work = U256::from_str_radix("000000000000000000000000000000000000000000000000000038946224e37e", 16).unwrap();
+        let expected_work = U256::from_str_radix(
+            "000000000000000000000000000000000000000000000000000038946224e37e",
+            16,
+        )
+        .unwrap();
         assert_eq!(work.0, expected_work);
     }
 
@@ -835,12 +886,30 @@ mod tests {
     fn test_work_monotonic_decrease_exact() {
         // Test exact monotonic decrease with precise expected values
         let test_cases = vec![
-            (2u64, "5555555555555555555555555555555555555555555555555555555555555555"),
-            (4u64, "3333333333333333333333333333333333333333333333333333333333333333"),
-            (8u64, "1c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71"),
-            (16u64, "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"),
-            (32u64, "07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1"),
-            (64u64, "03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f0"),
+            (
+                2u64,
+                "5555555555555555555555555555555555555555555555555555555555555555",
+            ),
+            (
+                4u64,
+                "3333333333333333333333333333333333333333333333333333333333333333",
+            ),
+            (
+                8u64,
+                "1c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71c71",
+            ),
+            (
+                16u64,
+                "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f",
+            ),
+            (
+                32u64,
+                "07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1f07c1",
+            ),
+            (
+                64u64,
+                "03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f03f0",
+            ),
         ];
 
         for (target_val, expected_hex) in test_cases {
@@ -848,7 +917,11 @@ mod tests {
             let work = target.to_work().unwrap();
             let expected_work = U256::from_str_radix(expected_hex, 16).unwrap();
 
-            assert_eq!(work.0, expected_work, "Work calculation failed for target: {}", target_val);
+            assert_eq!(
+                work.0, expected_work,
+                "Work calculation failed for target: {}",
+                target_val
+            );
         }
     }
 
@@ -856,9 +929,18 @@ mod tests {
     fn test_large_target_values_exact() {
         // Test larger target values with exact expected results
         let test_cases = vec![
-            (1000u64, "004178749e8fba7004178749e8fba7004178749e8fba7004178749e8fba70041"),
-            (2000u64, "0020c06a7159f0644d45fb2370332ca6511c879cb8bd58675f4ff5c3debc93e4"),
-            (1000000u64, "000010c6f6873c67ecb4b00c89b01bf0546a14c7d05ea56be10a1586a792e7ba"),
+            (
+                1000u64,
+                "004178749e8fba7004178749e8fba7004178749e8fba7004178749e8fba70041",
+            ),
+            (
+                2000u64,
+                "0020c06a7159f0644d45fb2370332ca6511c879cb8bd58675f4ff5c3debc93e4",
+            ),
+            (
+                1000000u64,
+                "000010c6f6873c67ecb4b00c89b01bf0546a14c7d05ea56be10a1586a792e7ba",
+            ),
         ];
 
         for (target_val, expected_hex) in test_cases {
@@ -866,7 +948,11 @@ mod tests {
             let work = target.to_work().unwrap();
             let expected_work = U256::from_str_radix(expected_hex, 16).unwrap();
 
-            assert_eq!(work.0, expected_work, "Work calculation failed for target: {}", target_val);
+            assert_eq!(
+                work.0, expected_work,
+                "Work calculation failed for target: {}",
+                target_val
+            );
         }
     }
 
@@ -879,7 +965,11 @@ mod tests {
         let work = target.to_work().unwrap();
 
         // Expected work: 0x00000000000000000000000000000000000000000000000000000000000f423f
-        let expected_work = U256::from_str_radix("00000000000000000000000000000000000000000000000000000000000f423f", 16).unwrap();
+        let expected_work = U256::from_str_radix(
+            "00000000000000000000000000000000000000000000000000000000000f423f",
+            16,
+        )
+        .unwrap();
         assert_eq!(work.0, expected_work);
     }
 
@@ -906,15 +996,27 @@ mod tests {
         let work_2000 = target_2000.to_work().unwrap();
 
         // Expected exact values
-        let expected_work_1000 = U256::from_str_radix("004178749e8fba7004178749e8fba7004178749e8fba7004178749e8fba70041", 16).unwrap();
-        let expected_work_2000 = U256::from_str_radix("0020c06a7159f0644d45fb2370332ca6511c879cb8bd58675f4ff5c3debc93e4", 16).unwrap();
+        let expected_work_1000 = U256::from_str_radix(
+            "004178749e8fba7004178749e8fba7004178749e8fba7004178749e8fba70041",
+            16,
+        )
+        .unwrap();
+        let expected_work_2000 = U256::from_str_radix(
+            "0020c06a7159f0644d45fb2370332ca6511c879cb8bd58675f4ff5c3debc93e4",
+            16,
+        )
+        .unwrap();
 
         assert_eq!(work_1000.0, expected_work_1000);
         assert_eq!(work_2000.0, expected_work_2000);
 
         // Calculate 2 * work_2000 and verify it's what we expect
         let double_work_2000 = expected_work_2000 * U256::from(2u64);
-        let expected_double_work_2000 = U256::from_str_radix("004180d4e2b3e0c89a8bf646e066594ca2390f39717ab0cebe9feb87bd7927c8", 16).unwrap();
+        let expected_double_work_2000 = U256::from_str_radix(
+            "004180d4e2b3e0c89a8bf646e066594ca2390f39717ab0cebe9feb87bd7927c8",
+            16,
+        )
+        .unwrap();
 
         assert_eq!(double_work_2000, expected_double_work_2000);
 
@@ -931,8 +1033,11 @@ mod tests {
     fn test_formula_equivalence_exact() {
         // Test that our implementation produces exactly the same results as Bitcoin Core formula
         // for a comprehensive set of values
-        let test_values = [2u64, 3u64, 5u64, 7u64, 11u64, 13u64, 17u64, 19u64, 23u64, 29u64];
-        let expected_results = ["5555555555555555555555555555555555555555555555555555555555555555",
+        let test_values = [
+            2u64, 3u64, 5u64, 7u64, 11u64, 13u64, 17u64, 19u64, 23u64, 29u64,
+        ];
+        let expected_results = [
+            "5555555555555555555555555555555555555555555555555555555555555555",
             "4000000000000000000000000000000000000000000000000000000000000000",
             "2aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "2000000000000000000000000000000000000000000000000000000000000000",
@@ -941,14 +1046,19 @@ mod tests {
             "0e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38",
             "0ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
             "0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "0888888888888888888888888888888888888888888888888888888888888888"];
+            "0888888888888888888888888888888888888888888888888888888888888888",
+        ];
 
         for (i, val) in test_values.iter().enumerate() {
             let target = Target::new(U256::from(*val));
             let work = target.to_work().unwrap();
             let expected_work = U256::from_str_radix(expected_results[i], 16).unwrap();
 
-            assert_eq!(work.0, expected_work, "Work calculation failed for target: {}", val);
+            assert_eq!(
+                work.0, expected_work,
+                "Work calculation failed for target: {}",
+                val
+            );
         }
     }
 
@@ -956,9 +1066,9 @@ mod tests {
     fn test_work_not_zero_exact() {
         // Test exact non-zero results for various target values
         let test_cases = vec![
-            (2u64, false),           // Should be large
-            (1000u64, false),        // Should be medium
-            (1000000u64, false),     // Should be small but non-zero
+            (2u64, false),       // Should be large
+            (1000u64, false),    // Should be medium
+            (1000000u64, false), // Should be small but non-zero
         ];
 
         for (target_val, should_be_zero) in test_cases {
@@ -966,9 +1076,19 @@ mod tests {
             let work = target.to_work().unwrap();
 
             if should_be_zero {
-                assert_eq!(work.0, U256::zero(), "Work should be zero for target: {}", target_val);
+                assert_eq!(
+                    work.0,
+                    U256::zero(),
+                    "Work should be zero for target: {}",
+                    target_val
+                );
             } else {
-                assert_ne!(work.0, U256::zero(), "Work should not be zero for target: {}", target_val);
+                assert_ne!(
+                    work.0,
+                    U256::zero(),
+                    "Work should not be zero for target: {}",
+                    target_val
+                );
             }
         }
     }
