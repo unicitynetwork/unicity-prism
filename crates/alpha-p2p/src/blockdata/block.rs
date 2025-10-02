@@ -36,54 +36,34 @@ impl Decodable for RandomXHash {
 /// - The header of the block, which includes metadata like timestamp and previous block hash
 /// - A list of transactions contained within the block
 /// - An optional witness root, used for transaction witness data verification
-///
-/// # Example Usage
-///
-/// ```rust
-/// use bitcoin::blockdata::transaction::{Transaction, TxIn, TxOut};
-/// use bitcoin::hashes::sha256d;
-/// use bitcoin::blockdata::block::{Block, Header};
-///
-/// // Create a simple block with one transaction
-/// let tx = Transaction {
-///     version: bitcoin::blockdata::transaction::Version::ONE,
-///     lock_time: bitcoin::blockdata::locktime::absolute::LockTime::ZERO,
-///     input: vec![],
-///     output: vec![],
-/// };
-///
-/// // Create a block with the transaction
-/// let block = Block {
-///     transactions: vec![tx],
-///     witness_root: None,
-/// };
-///
-/// // Accessing block data
-/// let tx_count = block.transactions.len();
-/// println!("Block contains {} transactions", tx_count);
-/// ```
-#[derive(Clone, Debug)]
-pub struct Block {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Block<H: Header> {
     /// The block header
-    // pub header: Header,
+    pub header: H,
     /// List of transactions contained in the block
     pub transactions: Vec<Transaction>,
     /// Cached witness root, if it's been computed
     pub witness_root: Option<WitnessMerkleNode>,
 }
 
-impl Block {
+impl<H: Header> Block<H> {
     /// Creates a new empty block with no transactions
-    pub fn new() -> Self {
+    pub fn new(
+        header: H,
+        transactions: Vec<Transaction>,
+        witness_root: Option<WitnessMerkleNode>,
+    ) -> Self {
         Block {
-            transactions: vec![],
-            witness_root: None,
+            header,
+            transactions,
+            witness_root,
         }
     }
 
     /// Creates a new block with the specified transactions
-    pub fn with_transactions(transactions: Vec<Transaction>) -> Self {
+    pub fn with_transactions(header: H, transactions: Vec<Transaction>) -> Self {
         Block {
+            header,
             transactions,
             witness_root: None,
         }
@@ -107,5 +87,60 @@ impl Block {
     /// Gets a mutable reference to the transactions
     pub fn transactions_mut(&mut self) -> &mut Vec<Transaction> {
         &mut self.transactions
+    }
+}
+
+#[allow(
+    clippy::arithmetic_side_effects,
+    reason = "Won't fail on usize addition"
+)]
+impl<H: Header> Encodable for Block<H> {
+    fn consensus_encode<W: Write + ?Sized>(&self, writer: &mut W) -> Result<usize, IoError> {
+        let mut len = 0;
+
+        // Encode the header
+        len += self.header.consensus_encode(writer)?;
+
+        // Encode the number of transactions
+        len += (self.transactions.len() as u64).consensus_encode(writer)?;
+
+        // Encode each transaction
+        for tx in &self.transactions {
+            len += tx.consensus_encode(writer)?;
+        }
+
+        // Only encode witness_root if it exists
+        if let Some(ref witness_root) = self.witness_root {
+            len += witness_root.consensus_encode(writer)?;
+        }
+
+        Ok(len)
+    }
+}
+
+#[allow(clippy::cast_possible_truncation, reason = "It will fit.")]
+impl<H: Header> Decodable for Block<H> {
+    fn consensus_decode<R: Read + ?Sized>(reader: &mut R) -> Result<Self, EncodeDecodeError> {
+        // Decode the header
+        let header = H::consensus_decode(reader)?;
+
+        // Decode the number of transactions
+        let tx_count: u64 = Decodable::consensus_decode(reader)?;
+
+        // Decode each transaction
+        let mut transactions = Vec::with_capacity(tx_count as usize);
+        for _ in 0..tx_count {
+            transactions.push(Transaction::consensus_decode(reader)?);
+        }
+
+        // Try to decode witness_root - if we're at the end of the data, this will fail
+        // and we'll just set it to None
+        let witness_root = WitnessMerkleNode::consensus_decode(reader).ok();
+
+        Ok(Block {
+            header,
+            transactions,
+            witness_root,
+        })
     }
 }
