@@ -27,7 +27,7 @@
 //! assert_eq!(get_data.inventories().len(), 2);
 //! ```
 
-use super::inventory::{Inventory, InventoryList};
+pub(crate) use super::inventory::{Inventory, InventoryList};
 use alpha_p2p_derive::ConsensusCodec;
 
 /// Requests one or more data objects from another node. The objects are requested by an

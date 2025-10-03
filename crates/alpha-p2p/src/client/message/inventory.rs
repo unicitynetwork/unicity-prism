@@ -45,6 +45,7 @@ use crate::hashes::Hash;
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct InventoryList(pub Vec<Inventory>);
 
+#[allow(dead_code)]
 impl InventoryList {
     /// Constructs a new `InventoryList` from the given vector of `Inventory` items.
     pub fn new(inventories: Vec<Inventory>) -> Self {
@@ -152,13 +153,13 @@ impl<'a> IntoIterator for &'a InventoryList {
 }
 
 impl FromIterator<Inventory> for InventoryList {
-    fn from_iter<I: IntoIterator<Item=Inventory>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = Inventory>>(iter: I) -> Self {
         Self::new(iter.into_iter().collect())
     }
 }
 
 impl Extend<Inventory> for InventoryList {
-    fn extend<I: IntoIterator<Item=Inventory>>(&mut self, iter: I) {
+    fn extend<I: IntoIterator<Item = Inventory>>(&mut self, iter: I) {
         self.0.extend(iter);
     }
 }
@@ -202,6 +203,10 @@ impl Decodable for InventoryList {
     }
 }
 
+/// Inventory vector types used in Bitcoin P2P protocol.
+///
+/// Inventory vectors are used to advertise and request data (blocks, transactions, etc.)
+/// between peers in the Bitcoin network.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Inventory {
     /// The hash is a `Txid`.
@@ -235,7 +240,17 @@ pub enum Inventory {
     FilteredWitnessBlock(BlockHash),
     /// If an inventory received is unknown, it is stored as this variant for later reporting or
     /// other purposes.
-    Unknown { inv_type: u32, hash: [u8; 32] },
+    ///
+    /// # Fields
+    ///
+    /// * `inv_type` - The inventory type value that was not recognized
+    /// * `hash` - The hash associated with the unknown inventory type
+    Unknown {
+        /// The inventory type value that was not recognized
+        inv_type: u32,
+        /// The hash associated with the unknown inventory type
+        hash: [u8; 32],
+    },
 }
 
 impl Inventory {

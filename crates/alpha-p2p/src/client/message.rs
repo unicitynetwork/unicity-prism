@@ -13,24 +13,263 @@
 // See: https://developer.bitcoin.org/reference/p2p_networking.html#data-messages
 // Only requests are implemented as this client is not meant to relay.
 
-mod connection;
+pub(crate) mod connection;
 pub mod get_data;
 pub mod inventory;
-mod request;
-mod response;
+pub(crate) mod request;
+pub(crate) mod response;
 
 use crate::blockdata::block::{Block, Header};
-use crate::client::message::response::{Headers, NotFound, Tx};
-use alpha_p2p_derive::ConsensusCodec;
-pub use connection::{Ping, Pong, VerAck, Version};
+use crate::client::message::connection::FeeFilter;
+use crate::client::message::get_data::GetData;
+pub(crate) use crate::client::message::response::{Headers, NotFound, Tx};
+use crate::client::network::NetworkError;
+use crate::consensus::Decodable;
+use crate::io::{Error, Write};
+use bitcoin::consensus::Encodable;
+use bitcoin::p2p::message::CommandString;
+pub use connection::{Ping, Pong, SendCmpct, Version};
 pub use request::GetHeaders;
+use std::io;
+
+/// Enum for message commands to avoid string matching
+#[derive(Debug, Clone, PartialEq)]
+pub enum MessageCommand {
+    /// Version message - initial handshake message
+    Version,
+    /// Version acknowledgment - confirms handshake completion
+    VerAck,
+    /// Ping message - keep-alive message
+    Ping,
+    /// Pong message - response to ping
+    Pong,
+    /// WtxIdRelay message - signal preference for wtxid-based transaction relay
+    WtxIdRelay,
+    /// GetHeaders message - request for block headers
+    GetHeaders,
+    /// GetData message - request for specific data items
+    GetData,
+    /// Headers message - response with block headers
+    Headers,
+    /// Block message - full block data
+    Block,
+    /// Tx message - full transaction data
+    Tx,
+    /// NotFound message - requested data not found
+    NotFound,
+    /// SendAddrV2 message - signal preference for addrv2 format
+    SendAddrV2,
+    /// SendCmpct message - signal preference for compact block announcements
+    SendCmpct,
+    /// FeeFilter message - set minimum fee rate for transaction relay
+    FeeFilter,
+    /// Unknown command that wraps the command string
+    Unknown(String),
+}
+
+impl MessageCommand {
+    /// Parse a command string and decode the corresponding message payload
+    ///
+    /// This function combines the functionality of parsing a command string and
+    /// decoding the message payload into a single operation.
+    pub fn parse_and_decode<H: Header>(
+        command: &CommandString,
+        cursor: &mut io::Cursor<&[u8]>,
+    ) -> Result<Message<H>, NetworkError> {
+        match command.to_string().as_str() {
+            "version" => {
+                let version = Version::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Connection(Connection::Version(version)))
+            }
+            "verack" => Ok(Message::Connection(Connection::VerAck)),
+            "ping" => {
+                let ping = Ping::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Connection(Connection::Ping(ping)))
+            }
+            "pong" => {
+                let pong = Pong::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Connection(Connection::Pong(pong)))
+            }
+            "wtxidrelay" => Ok(Message::Connection(Connection::WtxIdRelay)),
+            "getheaders" => {
+                let get_headers =
+                    GetHeaders::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Request(Request::GetHeaders(get_headers)))
+            }
+            "getdata" => {
+                let get_data =
+                    GetData::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Request(Request::GetData(get_data)))
+            }
+            "headers" => {
+                let headers = Headers::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Response(Response::Headers(headers)))
+            }
+            "block" => {
+                let block = response::StandardBlock::consensus_decode(cursor)
+                    .map_err(NetworkError::Consensus)?;
+                Ok(Message::Response(Response::Block(Block {
+                    header: block.header,
+                    transactions: block.transactions,
+                    witness_root: None,
+                })))
+            }
+            "tx" => {
+                let tx = Tx::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Response(Response::Tx(tx)))
+            }
+            "notfound" => {
+                let not_found =
+                    NotFound::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Response(Response::NotFound(not_found)))
+            }
+            "sendaddrv2" => Ok(Message::Connection(Connection::SendAddrV2)),
+            "sendcmpct" => {
+                let sendcmpct =
+                    SendCmpct::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Connection(Connection::SendCmpct(sendcmpct)))
+            }
+            "feefilter" => {
+                let feefilter =
+                    FeeFilter::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Connection(Connection::FeeFilter(feefilter)))
+            }
+            _ => Err(NetworkError::InvalidCommand(format!(
+                "Unknown command: {}",
+                command
+            ))),
+        }
+    }
+
+    /// Convert from a CommandString
+    pub fn from_command_string(command: &CommandString) -> Result<Self, NetworkError> {
+        match command.to_string().as_str() {
+            "version" => Ok(MessageCommand::Version),
+            "verack" => Ok(MessageCommand::VerAck),
+            "ping" => Ok(MessageCommand::Ping),
+            "pong" => Ok(MessageCommand::Pong),
+            "wtxidrelay" => Ok(MessageCommand::WtxIdRelay),
+            "getheaders" => Ok(MessageCommand::GetHeaders),
+            "getdata" => Ok(MessageCommand::GetData),
+            "headers" => Ok(MessageCommand::Headers),
+            "block" => Ok(MessageCommand::Block),
+            "tx" => Ok(MessageCommand::Tx),
+            "notfound" => Ok(MessageCommand::NotFound),
+            "sendaddrv2" => Ok(MessageCommand::SendAddrV2),
+            "sendcmpct" => Ok(MessageCommand::SendCmpct),
+            "feefilter" => Ok(MessageCommand::FeeFilter),
+            _ => Err(NetworkError::InvalidCommand(format!(
+                "Unknown command: {}",
+                command
+            ))),
+        }
+    }
+
+    /// Convert to a CommandString
+    pub fn to_command_string(&self) -> Result<CommandString, NetworkError> {
+        let command_str = self.as_str();
+        CommandString::try_from(command_str)
+            .map_err(|_| NetworkError::InvalidCommand(command_str.to_string()))
+    }
+
+    /// Get the command as a string for logging purposes
+    pub fn as_str(&self) -> &str {
+        match self {
+            MessageCommand::Version => "version",
+            MessageCommand::VerAck => "verack",
+            MessageCommand::Ping => "ping",
+            MessageCommand::Pong => "pong",
+            MessageCommand::WtxIdRelay => "wtxidrelay",
+            MessageCommand::GetHeaders => "getheaders",
+            MessageCommand::GetData => "getdata",
+            MessageCommand::Headers => "headers",
+            MessageCommand::Block => "block",
+            MessageCommand::Tx => "tx",
+            MessageCommand::NotFound => "notfound",
+            MessageCommand::SendAddrV2 => "sendaddrv2",
+            MessageCommand::SendCmpct => "sendcmpct",
+            MessageCommand::FeeFilter => "feefilter",
+            MessageCommand::Unknown(s) => s,
+        }
+    }
+
+    /// Deserialize a message payload based on the command type
+    pub fn decode_payload<H: Header>(
+        &self,
+        cursor: &mut io::Cursor<&[u8]>,
+    ) -> Result<Message<H>, NetworkError> {
+        match self {
+            MessageCommand::Version => {
+                let version = Version::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Connection(Connection::Version(version)))
+            }
+            MessageCommand::VerAck => Ok(Message::Connection(Connection::VerAck)),
+            MessageCommand::Ping => {
+                let ping = Ping::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Connection(Connection::Ping(ping)))
+            }
+            MessageCommand::Pong => {
+                let pong = Pong::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Connection(Connection::Pong(pong)))
+            }
+            MessageCommand::WtxIdRelay => Ok(Message::Connection(Connection::WtxIdRelay)),
+            MessageCommand::GetHeaders => {
+                let get_headers =
+                    GetHeaders::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Request(Request::GetHeaders(get_headers)))
+            }
+            MessageCommand::Headers => {
+                let headers = Headers::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Response(Response::Headers(headers)))
+            }
+            MessageCommand::Block => {
+                let block = response::StandardBlock::consensus_decode(cursor)
+                    .map_err(NetworkError::Consensus)?;
+                Ok(Message::Response(Response::Block(Block {
+                    header: block.header,
+                    transactions: block.transactions,
+                    witness_root: None,
+                })))
+            }
+            MessageCommand::Tx => {
+                let tx = Tx::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Response(Response::Tx(tx)))
+            }
+            MessageCommand::NotFound => {
+                let not_found =
+                    NotFound::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Response(Response::NotFound(not_found)))
+            }
+            MessageCommand::SendAddrV2 => Ok(Message::Connection(Connection::SendAddrV2)),
+            MessageCommand::SendCmpct => {
+                let sendcmpct =
+                    SendCmpct::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Connection(Connection::SendCmpct(sendcmpct)))
+            }
+            MessageCommand::FeeFilter => {
+                let feefilter =
+                    FeeFilter::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Connection(Connection::FeeFilter(feefilter)))
+            }
+            MessageCommand::GetData => {
+                let get_data =
+                    GetData::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
+                Ok(Message::Request(Request::GetData(get_data)))
+            }
+            MessageCommand::Unknown(command) => Err(NetworkError::InvalidCommand(format!(
+                "Cannot decode unknown command: {}",
+                command
+            ))),
+        }
+    }
+}
 
 /// Top-level Bitcoin P2P network message enum.
 ///
 /// This enum represents all possible types of messages that can be sent or received
 /// in the Bitcoin P2P network. Each variant contains a specific type of message,
 /// allowing for proper handling and dispatching of messages throughout the network.
-#[derive(Debug, Clone, PartialEq, Eq, ConsensusCodec)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message<H: Header> {
     /// Protocol-level messages used for establishing and maintaining connections.
     ///
@@ -51,11 +290,48 @@ pub enum Message<H: Header> {
     Response(Response<H>),
 }
 
-/// Connection-level messages used for establishing and maintaining peer connections.
+impl<H: Header> Message<H> {
+    /// Get the MessageCommand for this Message
+    pub fn command(&self) -> MessageCommand {
+        match self {
+            Message::Connection(conn) => match conn {
+                Connection::Version(_) => MessageCommand::Version,
+                Connection::VerAck => MessageCommand::VerAck,
+                Connection::Ping(_) => MessageCommand::Ping,
+                Connection::Pong(_) => MessageCommand::Pong,
+                Connection::WtxIdRelay => MessageCommand::WtxIdRelay,
+                Connection::SendAddrV2 => MessageCommand::SendAddrV2,
+                Connection::SendCmpct(_) => MessageCommand::SendCmpct,
+                Connection::FeeFilter(_) => MessageCommand::FeeFilter,
+            },
+            Message::Request(req) => match req {
+                Request::GetHeaders(_) => MessageCommand::GetHeaders,
+                Request::GetData(_) => MessageCommand::GetData,
+            },
+            Message::Response(resp) => match resp {
+                Response::Headers(_) => MessageCommand::Headers,
+                Response::Block(_) => MessageCommand::Block,
+                Response::Tx(_) => MessageCommand::Tx,
+                Response::NotFound(_) => MessageCommand::NotFound,
+            },
+        }
+    }
+}
+
+impl<H: Header> Encodable for Message<H> {
+    fn consensus_encode<W: Write + ?Sized>(&self, writer: &mut W) -> Result<usize, Error> {
+        match self {
+            Message::Connection(msg) => msg.consensus_encode(writer),
+            Message::Request(msg) => msg.consensus_encode(writer),
+            Message::Response(msg) => msg.consensus_encode(writer),
+        }
+    }
+}
+
 ///
 /// These messages are part of the Bitcoin P2P protocol handshake and connection management,
 /// including version negotiation, acknowledgments, and keep-alive communication.
-#[derive(Debug, Clone, PartialEq, Eq, ConsensusCodec)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Connection {
     /// Initial handshake message - sent to introduce this node to a peer.
     ///
@@ -70,7 +346,7 @@ pub enum Connection {
     ///
     /// This message is sent after receiving a version message to confirm
     /// that the handshake has been successfully completed and both peers are ready.
-    VerAck(VerAck),
+    VerAck,
 
     /// Keep-alive message - sent periodically to maintain connection.
     ///
@@ -83,6 +359,48 @@ pub enum Connection {
     /// This is the standard response to keep-alive messages, confirming that
     /// this node is still active and responsive.
     Pong(Pong),
+
+    /// Signal preference for wtxid-based transaction relay (BIP 339).
+    ///
+    /// This message signals that the node prefers to use transaction identifiers
+    /// (wtxids) instead of transaction hashes for transaction relay.
+    /// The message has no payload.
+    WtxIdRelay,
+
+    /// Signal preference for addrv2 format (BIP 155).
+    ///
+    /// This message signals that the node wants to receive address messages in the
+    /// addrv2 format, which supports more address types than the original addr format.
+    /// The message has no payload.
+    SendAddrV2,
+
+    /// Signal preference for compact block announcements (BIP 152).
+    ///
+    /// This message is used to signal to a peer whether they should announce new blocks
+    /// using compact blocks (cmpctblock messages) or traditional inv/headers messages.
+    SendCmpct(SendCmpct),
+
+    /// Set minimum fee rate for transaction relay (BIP 133).
+    ///
+    /// This message informs peers about the minimum fee rate (in satoshis per kilobyte)
+    /// for which transactions should be relayed to this peer. Transactions with fee rates
+    /// below this value should not be relayed to this peer.
+    FeeFilter(FeeFilter),
+}
+
+impl Encodable for Connection {
+    fn consensus_encode<W: Write + ?Sized>(&self, writer: &mut W) -> Result<usize, Error> {
+        match self {
+            Connection::Version(msg) => msg.consensus_encode(writer),
+            Connection::VerAck => Ok(0), // VerAck has no payload
+            Connection::Ping(msg) => msg.consensus_encode(writer),
+            Connection::Pong(msg) => msg.consensus_encode(writer),
+            Connection::WtxIdRelay => Ok(0), // WtxIdRelay has no payload
+            Connection::SendAddrV2 => Ok(0), // SendAddrV2 has no payload
+            Connection::SendCmpct(msg) => msg.consensus_encode(writer),
+            Connection::FeeFilter(msg) => msg.consensus_encode(writer),
+        }
+    }
 }
 
 /// Request messages sent from this client to other peers in the network.
@@ -90,7 +408,7 @@ pub enum Connection {
 /// These are outgoing requests that ask for specific data from other nodes,
 /// such as headers, blocks, or transactions. The client only sends requests
 /// and does not relay data to other peers.
-#[derive(Debug, Clone, PartialEq, Eq, ConsensusCodec)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
     /// Request for blocks or transactions.
     ///
@@ -98,13 +416,28 @@ pub enum Request {
     /// a set of known block hashes, allowing the client to synchronize its view
     /// of the blockchain with other peers.
     GetHeaders(GetHeaders),
+
+    /// Request for specific data items.
+    ///
+    /// The GetData message is used to request specific blocks, transactions, or
+    /// other data items from peers, identified by their inventory vectors.
+    GetData(GetData),
+}
+
+impl Encodable for Request {
+    fn consensus_encode<W: Write + ?Sized>(&self, writer: &mut W) -> Result<usize, Error> {
+        match self {
+            Request::GetHeaders(msg) => msg.consensus_encode(writer),
+            Request::GetData(msg) => msg.consensus_encode(writer),
+        }
+    }
 }
 
 /// Response messages received from other peers in the network.
 ///
 /// These are incoming responses to requests made by this client, containing
 /// the requested data or error information from other nodes.
-#[derive(Debug, Clone, PartialEq, Eq, ConsensusCodec)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Response<H: Header> {
     /// Advertise new blocks or transactions.
     ///
@@ -130,6 +463,17 @@ pub enum Response<H: Header> {
     /// was not found on this peer. This may occur when the requested data is
     /// unknown to the node or has already been pruned from the local storage.
     NotFound(NotFound),
+}
+
+impl<H: Header> Encodable for Response<H> {
+    fn consensus_encode<W: Write + ?Sized>(&self, writer: &mut W) -> Result<usize, Error> {
+        match self {
+            Response::Headers(msg) => msg.consensus_encode(writer),
+            Response::Block(msg) => msg.consensus_encode(writer),
+            Response::Tx(msg) => msg.consensus_encode(writer),
+            Response::NotFound(msg) => msg.consensus_encode(writer),
+        }
+    }
 }
 
 // From trait implementations for convenient conversions
@@ -158,12 +502,6 @@ impl From<Version> for Connection {
     }
 }
 
-impl From<VerAck> for Connection {
-    fn from(msg: VerAck) -> Self {
-        Connection::VerAck(msg)
-    }
-}
-
 impl From<Ping> for Connection {
     fn from(msg: Ping) -> Self {
         Connection::Ping(msg)
@@ -176,9 +514,27 @@ impl From<Pong> for Connection {
     }
 }
 
+impl From<SendCmpct> for Connection {
+    fn from(msg: SendCmpct) -> Self {
+        Connection::SendCmpct(msg)
+    }
+}
+
+impl From<FeeFilter> for Connection {
+    fn from(msg: FeeFilter) -> Self {
+        Connection::FeeFilter(msg)
+    }
+}
+
 impl From<GetHeaders> for Request {
     fn from(msg: GetHeaders) -> Self {
         Request::GetHeaders(msg)
+    }
+}
+
+impl From<GetData> for Request {
+    fn from(msg: GetData) -> Self {
+        Request::GetData(msg)
     }
 }
 

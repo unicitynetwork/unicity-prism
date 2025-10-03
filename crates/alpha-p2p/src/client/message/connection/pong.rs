@@ -20,7 +20,7 @@ use alpha_p2p_derive::ConsensusCodec;
 ///
 /// assert_eq!(pong.nonce(), 12345);
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, ConsensusCodec)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, ConsensusCodec)]
 pub struct Pong {
     nonce: u64,
 }
@@ -74,7 +74,7 @@ mod tests {
     use super::*;
     use bitcoin::consensus::{Decodable, Encodable};
     use hex;
-    use rand::{rng, RngCore};
+    use rand::{RngCore, rng};
     use std::io::Cursor;
 
     #[test]

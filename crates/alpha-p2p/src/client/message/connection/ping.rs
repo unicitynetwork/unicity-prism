@@ -1,5 +1,5 @@
 use alpha_p2p_derive::ConsensusCodec;
-use rand::{rng, RngCore};
+use rand::{RngCore, rng};
 
 /// Represents a Ping message in the P2P protocol.
 ///
@@ -20,7 +20,7 @@ use rand::{rng, RngCore};
 ///
 /// assert!(ping.nonce() != 0); // Nonce should be a random
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, ConsensusCodec)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, ConsensusCodec)]
 pub struct Ping {
     nonce: u64,
 }
@@ -100,6 +100,12 @@ impl Ping {
     /// ```
     pub fn nonce(&self) -> u64 {
         self.nonce
+    }
+}
+
+impl Default for Ping {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

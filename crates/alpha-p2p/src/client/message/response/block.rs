@@ -44,10 +44,9 @@
 use crate::blockdata::block::{Header, WitnessMerkleNode};
 use crate::blockdata::transaction::Transaction;
 use alpha_p2p_derive::ConsensusCodec;
-use bitcoin::consensus::{Decodable, Encodable};
 
 /// Trait for block response messages to allow type-safe handling of both witness and non-witness blocks.
-pub trait Block<H: Header>: Encodable + Decodable + Send + Sync {
+pub trait Block<H: Header>: Send + Sync {
     /// Returns the block header.
     fn header(&self) -> &H;
 
@@ -69,6 +68,7 @@ pub struct StandardBlock<H: Header> {
     pub transactions: Vec<Transaction>,
 }
 
+#[allow(dead_code)]
 impl<H: Header> StandardBlock<H> {
     /// Creates a new `StandardBlock` response message with the specified header and transactions.
     ///
@@ -126,6 +126,7 @@ impl<H: Header> Block<H> for StandardBlock<H> {
 /// - A list of transactions contained in the block  
 /// - Witness root for transaction witness data verification
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ConsensusCodec)]
+#[allow(dead_code)]
 pub struct WitnessBlock<H: Header> {
     /// The block header containing metadata like timestamp and previous block hash
     pub header: H,
@@ -137,6 +138,7 @@ pub struct WitnessBlock<H: Header> {
     pub witness_root: WitnessMerkleNode,
 }
 
+#[allow(dead_code)]
 impl<H: Header> WitnessBlock<H> {
     /// Creates a new `WitnessBlock` response message with the specified header, transactions and witness root.
     ///
@@ -195,7 +197,7 @@ mod tests {
     fn create_test_transaction() -> Transaction {
         // Create a minimal valid transaction using the bitcoin crate types
         use crate::blockdata::transaction::Version;
-        use bitcoin::{locktime::absolute, Amount, ScriptBuf, Sequence, TxIn, TxOut};
+        use bitcoin::{Amount, ScriptBuf, Sequence, TxIn, TxOut, locktime::absolute};
 
         let txin = TxIn {
             previous_output: bitcoin::OutPoint::null(),
