@@ -10,6 +10,10 @@ repository.workspace = true
 homepage.workspace = true
 readme.workspace = true
 
+[[bin]]
+name = "alphabridge"
+path = "src/bin/main.rs"
+
 [dependencies]
 unicity-prism-derive = { path = "../derive" }
 unicity-prism-common = { path = "../common" }
