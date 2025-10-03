@@ -31,38 +31,38 @@ pub struct RandomXHeader {
     /// In Bitcoin, this field originally indicated block version rules,
     /// but is now used for signaling soft fork activation.
     pub version: Version,
-    
+
     /// Reference to the previous block in the chain.
     ///
     /// This creates the cryptographic link between blocks, forming the blockchain.
     /// Each block must reference the hash of the previous block to be valid.
     pub previous_header: BlockHash,
-    
+
     /// The root hash of the merkle tree of transactions in the block.
     ///
     /// This commits to all transactions in the block in a compact way,
     /// allowing for efficient verification of transaction inclusion.
     pub merkle_root: TxMerkleNode,
-    
+
     /// The timestamp of the block, as claimed by the miner.
     ///
     /// This is a Unix timestamp indicating when the block was created.
     /// It's used in difficulty adjustment and has some constraints on valid values.
     pub timestamp: u32,
-    
+
     /// The target value below which the blockhash must lie.
     ///
     /// This is the compact representation of the difficulty target.
     /// Miners must find a nonce that produces a block hash below this target.
     pub bits: CompactTarget,
-    
+
     /// The nonce, selected to obtain a low enough blockhash.
     ///
     /// Miners increment this value to try different hashes until they find
     /// one that meets the difficulty target. This is the field they modify
     /// during mining.
     pub nonce: u32,
-    
+
     /// The RandomX hash for this block.
     ///
     /// This additional field contains the RandomX proof-of-work hash,
@@ -128,6 +128,9 @@ impl Header for RandomXHeader {
     /// This method is currently unimplemented and needs to be completed.
     /// It should validate the RandomX hash against the target, not the block hash.
     fn validate_pow(&self, _required_target: Target) -> Result<BlockHash, ValidationError> {
-        todo!()
+        // TODO: Implement RandomX proof-of-work validation
+        // This should validate that self.randomx_hash is below the required_target
+        // For now, return an error to indicate this is not yet implemented
+        Err(ValidationError::BadProofOfWork)
     }
 }

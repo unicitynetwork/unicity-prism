@@ -2,17 +2,24 @@ mod header;
 
 use crate::blockdata::transaction::Transaction;
 use crate::consensus::{Decodable, Encodable, EncodeDecodeError};
-use crate::hashes::{hash_newtype, sha256d};
+use crate::hashes::{Sha256Hash, hash_newtype};
 use crate::io::{Error as IoError, Read, Write};
 pub use bitcoin::block::{BlockHash, ValidationError, WitnessMerkleNode};
 pub use header::{BitcoinHeader, Header, RandomXHeader};
 
+/// Type alias for a Bitcoin block.
+pub type BitcoinBlock = Block<BitcoinHeader>;
+
+/// Type alias for a RandomX block.
+pub type RandomXBlock = Block<RandomXHeader>;
+
 /// Denotes in the block header if it is a RandomX block, or not.
+#[allow(dead_code)]
 const RX_VERSIONBIT: i32 = 0x02;
 
 hash_newtype! {
     /// A hash type for RandomX blocks, based on SHA-256d.
-    pub struct RandomXHash(sha256d::Hash);
+    pub struct RandomXHash(Sha256Hash);
 }
 
 impl Encodable for RandomXHash {
@@ -69,6 +76,11 @@ impl<H: Header> Block<H> {
         }
     }
 
+    /// Gets a reference to the block header
+    pub fn header(&self) -> &H {
+        &self.header
+    }
+
     /// Adds a transaction to the block
     pub fn add_transaction(&mut self, tx: Transaction) {
         self.transactions.push(tx);
@@ -96,22 +108,22 @@ impl<H: Header> Block<H> {
 )]
 impl<H: Header> Encodable for Block<H> {
     fn consensus_encode<W: Write + ?Sized>(&self, writer: &mut W) -> Result<usize, IoError> {
-        let mut len = 0;
+        let mut len: usize = 0;
 
         // Encode the header
-        len += self.header.consensus_encode(writer)?;
+        len = len.saturating_add(self.header.consensus_encode(writer)?);
 
         // Encode the number of transactions
-        len += (self.transactions.len() as u64).consensus_encode(writer)?;
+        len = len.saturating_add((self.transactions.len() as u64).consensus_encode(writer)?);
 
         // Encode each transaction
         for tx in &self.transactions {
-            len += tx.consensus_encode(writer)?;
+            len = len.saturating_add(tx.consensus_encode(writer)?);
         }
 
         // Only encode witness_root if it exists
         if let Some(ref witness_root) = self.witness_root {
-            len += witness_root.consensus_encode(writer)?;
+            len = len.saturating_add(witness_root.consensus_encode(writer)?);
         }
 
         Ok(len)
@@ -128,12 +140,13 @@ impl<H: Header> Decodable for Block<H> {
         let tx_count: u64 = Decodable::consensus_decode(reader)?;
 
         // Decode each transaction
-        let mut transactions = Vec::with_capacity(tx_count as usize);
+        let tx_count_usize = usize::try_from(tx_count).unwrap_or(0);
+        let mut transactions = Vec::with_capacity(tx_count_usize);
         for _ in 0..tx_count {
             transactions.push(Transaction::consensus_decode(reader)?);
         }
 
-        // Try to decode witness_root - if we're at the end of the data, this will fail
+        // Try to decode witness_root - if we're at the end of the data, this will fail,
         // and we'll just set it to None
         let witness_root = WitnessMerkleNode::consensus_decode(reader).ok();
 

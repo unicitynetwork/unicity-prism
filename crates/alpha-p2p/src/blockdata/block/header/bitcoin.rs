@@ -4,12 +4,12 @@
 //! the common [`Header`] trait, enabling compatibility with existing Bitcoin infrastructure
 //! while maintaining the interface required by the Unicity Alpha network.
 
-use crate::blockdata::block::Header;
+use crate::blockdata::block::header::Header;
 use crate::pow::Target;
 use alpha_p2p_derive::ConsensusCodec;
-use bitcoin::block::ValidationError;
-pub use bitcoin::blockdata::block::Header as InnerBitcoinHeader;
 use bitcoin::BlockHash;
+use bitcoin::block::ValidationError;
+pub use bitcoin::blockdata::block::Header as InnerHeader;
 use serde::{Deserialize, Serialize};
 
 /// A wrapper around Bitcoin's standard block header.
@@ -28,13 +28,13 @@ use serde::{Deserialize, Serialize};
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ConsensusCodec,
 )]
-pub struct BitcoinHeader(InnerBitcoinHeader);
+pub struct BitcoinHeader(InnerHeader);
 
 impl Header for BitcoinHeader {
     /// The size of a Bitcoin block header in bytes.
     ///
     /// Bitcoin headers are always 80 bytes, following the Bitcoin protocol specification.
-    const SIZE: usize = InnerBitcoinHeader::SIZE;
+    const SIZE: usize = InnerHeader::SIZE;
 
     /// Computes the block hash using Bitcoin's standard double-SHA256 algorithm.
     ///
@@ -80,7 +80,7 @@ impl Header for BitcoinHeader {
     }
 }
 
-impl From<InnerBitcoinHeader> for BitcoinHeader {
+impl From<InnerHeader> for BitcoinHeader {
     /// Creates a new BitcoinHeader from a standard Bitcoin header.
     ///
     /// This conversion is straightforward as BitcoinHeader is just a thin wrapper
@@ -93,7 +93,7 @@ impl From<InnerBitcoinHeader> for BitcoinHeader {
     /// # Returns
     ///
     /// A new BitcoinHeader instance wrapping the provided header
-    fn from(header: InnerBitcoinHeader) -> Self {
+    fn from(header: InnerHeader) -> Self {
         BitcoinHeader(header)
     }
 }
