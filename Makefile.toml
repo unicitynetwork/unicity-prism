@@ -1,0 +1,136 @@
+[config]
+skip_core_tasks = true
+default_to_workspace = true
+
+[tasks.default]
+alias = "help"
+
+[tasks.help]
+description = "Prints this help message"
+script = '''
+cargo make --list-all-steps
+'''
+
+# Build tasks
+[tasks.build]
+description = "Build the project with all features"
+command = "cargo"
+args = ["build", "--workspace"]
+
+[tasks.build-release]
+description = "Build the project in release mode with all features"
+command = "cargo"
+args = ["build", "--workspace", "--release"]
+
+# Test tasks
+[tasks.test]
+description = "Run tests with all features"
+command = "cargo"
+args = ["test", "--workspace"]
+
+[tasks.test-release]
+description = "Run tests in release mode with all features"
+command = "cargo"
+args = ["test", "--workspace", "--release"]
+
+# Code quality tasks
+[tasks.format]
+description = "Format the code"
+command = "cargo"
+args = ["+nightly", "fmt", "--all"]
+
+[tasks.format-check]
+description = "Check if the code is properly formatted"
+command = "cargo"
+toolchain = "nightly"
+args = ["fmt", "--all", "--", "--check"]
+
+[tasks.clippy]
+description = "Run clippy lints"
+command = "cargo"
+args = ["clippy", "--workspace", "--all-targets"]
+
+[tasks.clippy-fix]
+description = "Run clippy and automatically fix issues"
+command = "cargo"
+args = ["clippy", "--workspace", "--all-targets", "--fix"]
+
+# Security and dependency tasks
+[tasks.deny]
+description = "Run cargo-deny checks"
+command = "cargo"
+args = ["deny", "check"]
+
+[tasks.audit]
+description = "Audit dependencies for security vulnerabilities"
+command = "cargo"
+args = ["audit"]
+
+[tasks.geiger]
+description = "Run cargo-geiger to scan for unsafe code"
+install_crate = "cargo-geiger"
+command = "cargo"
+args = ["geiger"]
+
+# Documentation tasks
+[tasks.doc]
+description = "Generate documentation"
+command = "cargo"
+args = ["doc", "--workspace"]
+
+[tasks.doc-open]
+description = "Generate and open documentation"
+command = "cargo"
+args = ["doc", "--workspace", "--open"]
+
+# Cleaning tasks
+[tasks.clean]
+description = "Clean build artifacts"
+command = "cargo"
+args = ["clean"]
+
+# CI tasks
+[tasks.ci]
+description = "Run all CI checks"
+workspace = false
+dependencies = [
+    "format-check",
+    "clippy",
+    "build",
+    "test",
+    "deny"
+]
+
+# Development workflow
+[tasks.check]
+description = "Run format check, clippy, and tests"
+dependencies = [
+    "format-check",
+    "clippy",
+    "test"
+]
+
+[tasks.pre-commit]
+description = "Run checks before committing"
+dependencies = [
+    "format",
+    "clippy-fix",
+    "test"
+]
+
+# Workspace management
+[tasks.update]
+description = "Update dependencies"
+command = "cargo"
+args = ["update"]
+
+[tasks.tree]
+description = "Display dependency tree"
+command = "cargo"
+args = ["tree"]
+
+[tasks.outdated]
+description = "Check for outdated dependencies"
+install_crate = "cargo-outdated"
+command = "cargo"
+args = ["outdated"]
