@@ -2,6 +2,7 @@ use crate::network::Network;
 use crate::pow::Target;
 
 /// ASERT anchor parameters.
+#[derive(Debug, Clone, Copy)]
 pub struct ASERTAnchorParams {
     /// Anchor block height.
     pub height: u32,
@@ -12,6 +13,7 @@ pub struct ASERTAnchorParams {
 }
 
 /// Consensus parameters for different networks.
+#[derive(Debug, Clone, Copy)]
 pub struct Params {
     /// Network for which these parameters are defined.
     pub network: Network,
@@ -56,6 +58,7 @@ pub struct Params {
 }
 
 impl Params {
+    /// Consensus parameters for the Unicity mainnet network.
     pub const MAINNET: Self = Self {
         network: Network::Mainnet,
         bip34_height: 70_228, // 953181e5afbf5a0052bdf405d6a23360ba6afa9c4a5bb2eda4a9b8f5de52fdcc
@@ -75,10 +78,56 @@ impl Params {
         unicity_enabled: true,
         rule_change_activiation_threshold: 1815, // 90% of 2016
         miner_confirmation_window: 2016,         // nPowTargetTimespan / nPowTargetSpacing
-        max_attainable_target: Target::zero(),     // Unsure yet if this is needed for Alpha?
-        pow_target_spacing: 2 * 60,              // 2 minutes
+        max_attainable_target: Target::mainnet_max_target(),
+        pow_target_spacing: 2 * 60,                 // 2 minutes
         pow_target_timespan: 14 * 24 * 60 * 60 / 5, // two weeks / 5
         allow_min_difficulty_blocks: false,
         no_pow_retargeting: false,
+    };
+
+    /// Consensus parameters for the Unicity testnet network.
+    pub const TESTNET: Self = Self {
+        network: Network::Testnet,
+        bip34_height: 1,               // Always active
+        bip65_height: 1,               // Always active
+        bip66_height: 1,               // Always active
+        randomx_height: 1,             // Always active
+        randomx_enforcement_height: 1, // Always active
+        randomx_difficulty_multiplier: 100_000,
+        pow_randomx: true,
+        randomx_epoch_duration: 7 * 24 * 60 * 60, // 1 week
+        asert_activiation_height: 1,              // Always active
+        asert_anchor_params: None,                // Not needed for testnet
+        unicity_enabled: true,
+        rule_change_activiation_threshold: 1512, // 75% of 2016
+        miner_confirmation_window: 2016,         // nPowTargetTimespan / nPowTargetSpacing
+        max_attainable_target: Target::mainnet_max_target(),
+        pow_target_spacing: 2 * 60,                 // 2 minutes
+        pow_target_timespan: 14 * 24 * 60 * 60 / 5, // two weeks / 5
+        allow_min_difficulty_blocks: true,
+        no_pow_retargeting: false,
+    };
+
+    /// Consensus parameters for the Unicity regtest network.
+    pub const REGTEST: Self = Self {
+        network: Network::Regtest,
+        bip34_height: 1,               // Always active
+        bip65_height: 1,               // Always active
+        bip66_height: 1,               // Always active
+        randomx_height: 1,             // Always active
+        randomx_enforcement_height: 1, // Always active
+        randomx_difficulty_multiplier: 100_000,
+        pow_randomx: true,
+        randomx_epoch_duration: 7 * 24 * 60 * 60, // 1 week
+        asert_activiation_height: 1,              // Always active
+        asert_anchor_params: None,                // Not needed for regtest
+        unicity_enabled: true,
+        rule_change_activiation_threshold: 108, // 75% of 144
+        miner_confirmation_window: 144,         // nPowTargetTimespan / nPowTargetSpacing
+        max_attainable_target: Target::regtest_max_target(),
+        pow_target_spacing: 2 * 60,                 // 2 minutes
+        pow_target_timespan: 14 * 24 * 60 * 60 / 5, // two weeks / 5
+        allow_min_difficulty_blocks: true,
+        no_pow_retargeting: true,
     };
 }
