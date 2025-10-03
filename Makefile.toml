@@ -22,16 +22,18 @@ description = "Build the project in release mode with all features"
 command = "cargo"
 args = ["build", "--workspace", "--release"]
 
-# Test tasks
+# Nextest tasks
 [tasks.test]
-description = "Run tests with all features"
+description = "Run tests with cargo-nextest"
+install_crate = "cargo-nextest"
 command = "cargo"
-args = ["test", "--workspace"]
+args = ["nextest", "run", "--workspace"]
 
 [tasks.test-release]
-description = "Run tests in release mode with all features"
+description = "Run tests in release mode with cargo-nextest"
+install_crate = "cargo-nextest"
 command = "cargo"
-args = ["test", "--workspace", "--release"]
+args = ["nextest", "run", "--workspace", "--release"]
 
 # Code quality tasks
 [tasks.format]
