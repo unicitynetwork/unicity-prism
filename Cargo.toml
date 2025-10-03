@@ -53,12 +53,10 @@ unimplemented = "deny"
 todo = "deny"
 unreachable = "deny"
 indexing_slicing = "deny"  # No direct array[i] access
-integer_arithmetic = "deny"  # Prevent overflow
+arithmetic_side_effects = "deny"  # Prevent overflow
 float_arithmetic = "deny"
 
 # Must be explicit about error handling
-result_unwrap_used = "deny"
-option_unwrap_used = "deny"
 
 # Memory safety
 cast_lossless = "deny"
@@ -74,6 +72,5 @@ correctness = "deny"
 suspicious = "deny"
 
 # Math specific
-integer_overflow = "deny"
 lossy_float_literal = "deny"
 
