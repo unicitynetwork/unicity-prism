@@ -1,0 +1,19 @@
+[package]
+name = "unicity-prism-core"
+description = "The core functionality of Prism."
+authors.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+
+[dependencies]
+risc0-zkvm = { version = "0.21.0", default-features = false }
+
+[features]
+cuda = ["risc0-zkvm/cuda"]
+default = []
+prove = ["risc0-zkvm/prove"]

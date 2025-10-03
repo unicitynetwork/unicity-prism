@@ -39,7 +39,8 @@ args = ["nextest", "run", "--workspace", "--release"]
 [tasks.format]
 description = "Format the code"
 command = "cargo"
-args = ["+nightly", "fmt", "--all"]
+toolchain = "nightly"
+args = ["fmt", "--all"]
 
 [tasks.format-check]
 description = "Check if the code is properly formatted"
