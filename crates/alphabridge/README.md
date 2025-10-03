@@ -68,9 +68,9 @@ graph LR
     end
 
     Storage -.-> Precompile
-    style AlphaChain fill: #f3e5f5
-    style Bridge fill: #e1f5fe
-    style zkEVM fill: #fff3e0
+    style AlphaChain fill: #333333,stroke:#ffffff,stroke-width:2px,color:#ffffff
+    style Bridge fill: #444444,stroke:#ffffff,stroke-width:2px,color:#ffffff
+    style zkEVM fill: #555555,stroke:#ffffff,stroke-width:2px,color:#ffffff
 ```
 
 ### Current Implementation
@@ -89,8 +89,8 @@ graph TB
         Synchronizer --> Database[(Block Data)]
     end
 
-    style AlphaNetwork fill: #f3e5f5
-    style AlphaBridge fill: #e1f5fe
+    style AlphaNetwork fill: #333333,stroke:#ffffff,stroke-width:2px,color:#ffffff
+    style AlphaBridge fill: #444444,stroke:#ffffff,stroke-width:2px,color:#ffffff
 ```
 
 ### Complete Data Flow
@@ -105,11 +105,11 @@ graph TD
     Precompile -->|5 . Store in State| zkEVMState[zkEVM State]
     User[User] -->|6 . Claim Tokens| zkEVMState
     zkEVMState -->|7 . Return Proof| User
-    style Miner fill: #ffeb3b
-    style Network fill: #f3e5f5
-    style Bridge fill: #e1f5fe
-    style Precompile fill: #fff3e0
-    style User fill: #c8e6c9
+    style Miner fill: #666666,stroke:#ffffff,stroke-width:2px,color:#ffffff
+    style Network fill: #333333,stroke:#ffffff,stroke-width:2px,color:#ffffff
+    style Bridge fill: #444444,stroke:#ffffff,stroke-width:2px,color:#ffffff
+    style Precompile fill: #555555,stroke:#ffffff,stroke-width:2px,color:#ffffff
+    style User fill: #666666,stroke:#ffffff,stroke-width:2px,color:#ffffff
 ```
 
 ### Component Interaction
