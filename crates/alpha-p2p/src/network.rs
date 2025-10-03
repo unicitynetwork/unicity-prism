@@ -1,6 +1,5 @@
 use crate::p2p::Magic;
 use bitcoin::constants::ChainHash;
-use bitcoin::network::UnknownChainHashError;
 use std::str::FromStr;
 use thiserror::Error;
 
@@ -12,6 +11,12 @@ pub enum ChainTypeError {
     InvalidChainType(String),
 }
 
+/// Error for unknown chain hash.
+#[derive(Clone, Copy, Debug, Error)]
+#[error("Unknown chain hash: {0}")]
+pub struct UnknownChainHashError(ChainHash);
+
+/// The Unicity network variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Network {
     /// Mainnet Unicity network.
@@ -23,20 +28,55 @@ pub enum Network {
 }
 
 impl Network {
+    /// Converts a magic value to the corresponding Network variant.
+    ///
+    /// # Arguments
+    ///
+    /// * `magic` - The magic bytes to convert
+    ///
+    /// # Returns
+    ///
+    /// * `Some(Network)` - The corresponding network if the magic is recognized
+    /// * `None` - If the magic bytes don't match any known network
     pub fn from_magic(magic: Magic) -> Option<Network> {
         Network::try_from(magic).ok()
     }
 
+    /// Returns the magic bytes for this network.
+    ///
+    /// # Returns
+    ///
+    /// The magic bytes corresponding to this network
     pub fn magic(self) -> Magic {
         Magic::from(self)
     }
 
+    /// Returns the string representation of this network.
+    ///
+    /// # Returns
+    ///
+    /// A string slice representing the network name
     pub fn as_str(&self) -> &'static str {
         // NOTE: Might be fine to simply use mainnet, testnet, regtest here.
         match self {
             Network::Mainnet => "alpha",
             Network::Testnet => "alphatestnet",
             Network::Regtest => "alpharegtest",
+        }
+    }
+}
+
+impl Network {
+    /// Returns the consensus parameters for this network.
+    ///
+    /// # Returns
+    ///
+    /// * `Params` - The consensus parameters for this network
+    pub fn consensus_params(self) -> crate::consensus::Params {
+        match self {
+            Network::Mainnet => crate::consensus::Params::MAINNET,
+            Network::Testnet => crate::consensus::Params::TESTNET,
+            Network::Regtest => crate::consensus::Params::REGTEST,
         }
     }
 }
@@ -67,13 +107,5 @@ impl TryFrom<String> for Network {
 
     fn try_from(s: String) -> Result<Self, Self::Error> {
         Network::try_from(s.as_str())
-    }
-}
-
-impl TryFrom<ChainHash> for Network {
-    type Error = UnknownChainHashError;
-
-    fn try_from(chain_hash: ChainHash) -> Result<Self, Self::Error> {
-        todo!()
     }
 }
