@@ -28,8 +28,6 @@ jobs:
         with:
           components: rustfmt
 
-      - name: Install clippy toolchain on stable
-        run: rustup component add clippy --toolchain stable
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
@@ -47,10 +45,13 @@ jobs:
         run: cargo +nightly fmt --all -- --check
 
       - name: Run cargo check
-        run: cargo check --workspace --all-targets
+        run: cargo +stable check --workspace --all-targets
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo +stable clippy --workspace --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo +stable test --verbose --workspace
 
       - name: Run tests with cargo-nextest
-        run: cargo nextest run --workspace --verbose
+        run: cargo +stable nextest run --workspace --verbose
