@@ -156,7 +156,7 @@ mod tests {
         let block_hash = BlockHash::from_byte_array([0; 32]);
         let inventory1 = Inventory::Transaction(txid);
         let inventory2 = Inventory::Block(block_hash);
-        let inventories = vec![inventory1.clone(), inventory2.clone()];
+        let inventories = vec![inventory1, inventory2];
 
         let response = NotFound::new(inventories);
 

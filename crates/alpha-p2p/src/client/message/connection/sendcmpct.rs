@@ -108,28 +108,28 @@ mod tests {
     #[test]
     fn test_sendcmpct_new() {
         let sendcmpct = SendCmpct::new(true, 1);
-        assert_eq!(sendcmpct.announce, true);
+        assert!(sendcmpct.announce);
         assert_eq!(sendcmpct.version, 1);
     }
 
     #[test]
     fn test_sendcmpct_enable() {
         let sendcmpct = SendCmpct::enable(2);
-        assert_eq!(sendcmpct.announce, true);
+        assert!(sendcmpct.announce);
         assert_eq!(sendcmpct.version, 2);
     }
 
     #[test]
     fn test_sendcmpct_disable() {
         let sendcmpct = SendCmpct::disable();
-        assert_eq!(sendcmpct.announce, false);
+        assert!(!sendcmpct.announce);
         assert_eq!(sendcmpct.version, 0);
     }
 
     #[test]
     fn test_sendcmpct_accessors() {
         let sendcmpct = SendCmpct::new(true, 1);
-        assert_eq!(sendcmpct.announce(), true);
+        assert!(sendcmpct.announce());
         assert_eq!(sendcmpct.version(), 1);
     }
 
@@ -174,15 +174,15 @@ mod tests {
 
         // Next 8 bytes should be version 1 in little-endian
         assert_eq!(encoded[1], 1);
-        for i in 2..9 {
-            assert_eq!(encoded[i], 0);
+        for byte in encoded.iter().take(9).skip(2) {
+            assert_eq!(*byte, 0);
         }
     }
 
     #[test]
     fn test_sendcmpct_clone_and_equality() {
         let sendcmpct = SendCmpct::new(false, 1);
-        let clone = sendcmpct.clone();
+        let clone = sendcmpct;
 
         assert_eq!(sendcmpct, clone);
     }

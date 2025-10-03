@@ -493,10 +493,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_timeout_configuration() {
-        let mut config = ConnectionConfig::default();
-        config.connect_timeout = Duration::from_secs(5);
-        config.read_timeout = Duration::from_secs(10);
-        config.write_timeout = Duration::from_secs(7);
+        let config = ConnectionConfig {
+            connect_timeout: Duration::from_secs(5),
+            read_timeout: Duration::from_secs(10),
+            write_timeout: Duration::from_secs(7),
+            ..Default::default()
+        };
 
         let manager = ConnectionManager::new(config);
 

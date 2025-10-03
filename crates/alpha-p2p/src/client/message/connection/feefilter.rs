@@ -189,7 +189,7 @@ mod tests {
     #[test]
     fn test_feefilter_clone_and_equality() {
         let feefilter = FeeFilter::new(1000);
-        let clone = feefilter.clone();
+        let clone = feefilter;
 
         assert_eq!(feefilter, clone);
     }
