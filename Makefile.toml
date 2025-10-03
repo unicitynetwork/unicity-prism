@@ -97,14 +97,20 @@ description = "Run all CI checks"
 workspace = false
 dependencies = [
     "format-check",
+    "check",
     "clippy",
-    "build",
-    "test",
+    "nextest",
     "deny"
 ]
 
-# Development workflow
+# Add a check task to match CI workflow
 [tasks.check]
+description = "Run cargo check"
+command = "cargo"
+args = ["check", "--workspace", "--all-targets"]
+
+# Development workflow
+[tasks.dev-check]
 description = "Run format check, clippy, and tests"
 dependencies = [
     "format-check",
