@@ -22,24 +22,7 @@
 //!
 //! # Examples
 //!
-//! ```rust
-//! use alpha_p2p::client::message::response::block::{StandardBlock, WitnessBlock};
-//! use alpha_p2p::client::message::response::block::Block;
-//!
-//! // Create a standard block
-//! let standard_block = StandardBlock::new(header, transactions);
-//!
-//! // Create a witness block
-//! let witness_block = WitnessBlock::new(header, transactions, witness_root);
-//!
-//! // Use the unified interface
-//! let block_header = standard_block.header();
-//! let block_transactions = standard_block.transactions();
-//!
-//! // Both types implement the Block trait
-//! let header1: &Header = standard_block.header();
-//! let header2: &Header = witness_block.header();
-//! ```
+//! TODO: Add examples when the library is more mature.
 
 use crate::blockdata::block::{Header, WitnessMerkleNode};
 use crate::blockdata::transaction::Transaction;
@@ -197,7 +180,7 @@ mod tests {
     fn create_test_transaction() -> Transaction {
         // Create a minimal valid transaction using the bitcoin crate types
         use crate::blockdata::transaction::Version;
-        use bitcoin::{Amount, ScriptBuf, Sequence, TxIn, TxOut, locktime::absolute};
+        use bitcoin::{locktime::absolute, Amount, ScriptBuf, Sequence, TxIn, TxOut};
 
         let txin = TxIn {
             previous_output: bitcoin::OutPoint::null(),

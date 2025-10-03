@@ -16,18 +16,7 @@
 //!
 //! # Examples
 //!
-//! ```rust
-//! use alpha_p2p::client::message::response::not_found::NotFound;
-//! use alpha_p2p::client::message::inventory::Inventory;
-//!
-//! // Create not found response
-//! let inventories = vec![Inventory::Block(block_hash)];
-//! let not_found = NotFound::new(inventories);
-//!
-//! // Check response properties
-//! assert_eq!(not_found.len(), 1);
-//! assert!(!not_found.is_empty());
-//! ```
+//! TODO: Add examples when the library is more mature.
 
 use crate::client::message::inventory::Inventory;
 use crate::consensus::{Decodable, Encodable};

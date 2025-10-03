@@ -210,14 +210,14 @@ mod tests {
     use super::*;
     use crate::blockdata::{block::BlockHash, transaction::Txid};
     use crate::consensus::{Decodable, Encodable};
-    use crate::util::hex_to_hash;
+    use crate::util::{hex_to_blockhash, hex_to_txid};
 
     #[test]
     fn test_get_data_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let txid: Txid =
-            hex_to_hash("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
+            hex_to_txid("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
         let block_hash: BlockHash =
-            hex_to_hash("00000000000000000007878ec04bb2543ee2c5f9ce6d8b9c8d2d41a5b17db6a6")?;
+            hex_to_blockhash("00000000000000000007878ec04bb2543ee2c5f9ce6d8b9c8d2d41a5b17db6a6")?;
 
         let original = GetData::new(vec![
             Inventory::Transaction(txid),

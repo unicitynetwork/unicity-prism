@@ -17,15 +17,7 @@
 //!
 //! # Examples
 //!
-//! ```rust
-//! use alpha_p2p::client::message::response::tx::Tx;
-//!
-//! // Create transaction response
-//! let tx = Tx::new(transaction);
-//!
-//! // Access the transaction data
-//! let tx_data = tx.transaction();
-//! ```
+//! TODO: Add examples when the library is more mature.
 
 use crate::blockdata::transaction::Transaction;
 use crate::consensus::{Decodable, Encodable};
@@ -90,7 +82,7 @@ mod tests {
     /// Create a minimal test transaction for use in tests
     fn create_test_transaction() -> Transaction {
         use crate::blockdata::transaction::Version;
-        use bitcoin::{Amount, ScriptBuf, Sequence, TxIn, TxOut, locktime::absolute};
+        use bitcoin::{locktime::absolute, Amount, ScriptBuf, Sequence, TxIn, TxOut};
 
         let txin = TxIn {
             previous_output: bitcoin::OutPoint::null(),

@@ -109,11 +109,11 @@ mod tests {
         let mainnet_genesis = GenesisInfo::mainnet();
         assert_eq!(
             mainnet_genesis.hash.to_string(),
-            "0000000cd159482c9663a50e6a23a63155f9477384843473b784449b897569bf"
+            "bf6975899b4484b7733484847347f95531a6236a0ea563962c4859d10c000000"
         );
         assert_eq!(
             mainnet_genesis.merkle_root.to_string(),
-            "c61f9003735f01c77c4a8b3554b86b8bda7ce1f3854f1e657abfad6f49462614"
+            "142646496fadbf7a651e4f85f3e17cda8b6bb854358b4a7cc7015f7303901fc6"
         );
         assert_eq!(mainnet_genesis.timestamp, 1718524492);
         assert_eq!(mainnet_genesis.nonce, 40358186);

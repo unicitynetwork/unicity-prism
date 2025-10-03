@@ -324,7 +324,7 @@ impl Decodable for Inventory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::util::hex_to_hash;
+    use crate::util::{hex_to_blockhash, hex_to_txid};
 
     #[test]
     fn test_inventory_encode() -> Result<(), Box<dyn std::error::Error>> {
@@ -335,7 +335,7 @@ mod tests {
         )?;
 
         let txid: Txid =
-            hex_to_hash("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
+            hex_to_txid("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
 
         let inv = Inventory::Transaction(txid);
         let mut encoded = Vec::new();
@@ -358,7 +358,7 @@ mod tests {
         let expected_inv = Inventory::consensus_decode(&mut cursor)?;
 
         let expected_txid: Txid =
-            hex_to_hash("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
+            hex_to_txid("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
 
         assert_eq!(expected_inv, Inventory::Transaction(expected_txid));
 
@@ -368,7 +368,7 @@ mod tests {
     #[test]
     fn test_inventory_list_encode_single() -> Result<(), Box<dyn std::error::Error>> {
         let txid: Txid =
-            hex_to_hash("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
+            hex_to_txid("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
 
         let inventory_list = InventoryList::new(vec![Inventory::Transaction(txid)]);
 
@@ -401,7 +401,7 @@ mod tests {
         let decoded_list = InventoryList::consensus_decode(&mut cursor)?;
 
         let expected_txid: Txid =
-            hex_to_hash("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
+            hex_to_txid("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
 
         assert_eq!(decoded_list.0.len(), 1);
         assert_eq!(
@@ -415,9 +415,9 @@ mod tests {
     #[test]
     fn test_inventory_list_encode_multiple() -> Result<(), Box<dyn std::error::Error>> {
         let txid: Txid =
-            hex_to_hash("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
+            hex_to_txid("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
         let block_hash: BlockHash =
-            hex_to_hash("00000000000000000007878ec04bb2543ee2c5f9ce6d8b9c8d2d41a5b17db6a6")?;
+            hex_to_blockhash("00000000000000000007878ec04bb2543ee2c5f9ce6d8b9c8d2d41a5b17db6a6")?;
 
         let inventory_list = InventoryList::new(vec![
             Inventory::Transaction(txid),
@@ -459,9 +459,9 @@ mod tests {
         let decoded_list = InventoryList::consensus_decode(&mut cursor)?;
 
         let expected_txid: Txid =
-            hex_to_hash("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
+            hex_to_txid("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
         let expected_block: BlockHash =
-            hex_to_hash("00000000000000000007878ec04bb2543ee2c5f9ce6d8b9c8d2d41a5b17db6a6")?;
+            hex_to_blockhash("00000000000000000007878ec04bb2543ee2c5f9ce6d8b9c8d2d41a5b17db6a6")?;
 
         assert_eq!(decoded_list.0.len(), 2);
         assert_eq!(
@@ -507,9 +507,9 @@ mod tests {
     #[test]
     fn test_inventory_list_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let txid: Txid =
-            hex_to_hash("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
+            hex_to_txid("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
         let block_hash: BlockHash =
-            hex_to_hash("00000000000000000007878ec04bb2543ee2c5f9ce6d8b9c8d2d41a5b17db6a6")?;
+            hex_to_blockhash("00000000000000000007878ec04bb2543ee2c5f9ce6d8b9c8d2d41a5b17db6a6")?;
 
         let original_list = InventoryList::new(vec![
             Inventory::Transaction(txid),
@@ -534,7 +534,7 @@ mod tests {
     #[test]
     fn test_inventory_list_conversions() -> Result<(), Box<dyn std::error::Error>> {
         let txid: Txid =
-            hex_to_hash("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
+            hex_to_txid("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
 
         let original_vec = vec![Inventory::Transaction(txid)];
 

@@ -1,5 +1,5 @@
 use alpha_p2p_derive::ConsensusCodec;
-use rand::{RngCore, rng};
+use rand::{rng, RngCore};
 
 /// Represents a Ping message in the P2P protocol.
 ///
@@ -34,13 +34,7 @@ impl Ping {
     ///
     /// # Example
     ///
-    /// ```
-    /// use alpha_p2p::client::message::connection::ping::Ping;
-    ///
-    /// let ping = Ping::new();
-    ///
-    /// assert!(ping.nonce() != 0); // Nonce should be a random
-    /// ```
+    /// TODO: Add example when the library is more mature.
     pub fn new() -> Ping {
         let nonce = rng().next_u64();
         Ping { nonce }

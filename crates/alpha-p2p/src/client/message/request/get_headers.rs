@@ -315,7 +315,7 @@ impl GetHeaders {
 mod tests {
     use super::*;
     use crate::consensus::{Decodable, Encodable};
-    use crate::util::hex_to_hash;
+    use crate::util::hex_to_blockhash;
 
     #[test]
     pub fn test_getheaders_encode() -> Result<(), Box<dyn std::error::Error>> {
@@ -330,9 +330,9 @@ mod tests {
             00000000000000000000000000000000",
         )?;
         let hash1: BlockHash =
-            hex_to_hash("d39f608a7775b537729884d4e6633bb2105e55a16a14d31b0000000000000000")?;
+            hex_to_blockhash("d39f608a7775b537729884d4e6633bb2105e55a16a14d31b0000000000000000")?;
         let hash2: BlockHash =
-            hex_to_hash("5c3e6403d40837110a2e8afb602b1c01714bda7ce23bea0a0000000000000000")?;
+            hex_to_blockhash("5c3e6403d40837110a2e8afb602b1c01714bda7ce23bea0a0000000000000000")?;
         let get_headers_message = GetHeaders::new(70001, vec![hash1, hash2], None);
         let mut encoded = Vec::new();
         let _bytes_written = get_headers_message.consensus_encode(&mut encoded)?;
@@ -356,9 +356,9 @@ mod tests {
         let decoded_message = GetHeaders::consensus_decode(&mut cursor)?;
         let expected_version = 70001;
         let expected_hash1: BlockHash =
-            hex_to_hash("d39f608a7775b537729884d4e6633bb2105e55a16a14d31b0000000000000000")?;
+            hex_to_blockhash("d39f608a7775b537729884d4e6633bb2105e55a16a14d31b0000000000000000")?;
         let expected_hash2: BlockHash =
-            hex_to_hash("5c3e6403d40837110a2e8afb602b1c01714bda7ce23bea0a0000000000000000")?;
+            hex_to_blockhash("5c3e6403d40837110a2e8afb602b1c01714bda7ce23bea0a0000000000000000")?;
         let expected_stop_hash = BlockHash::all_zeros();
         assert_eq!(decoded_message.version, expected_version);
         assert_eq!(decoded_message.hashes.len(), 2);

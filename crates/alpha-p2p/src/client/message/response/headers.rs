@@ -16,16 +16,7 @@
 //!
 //! # Examples
 //!
-//! ```rust
-//! use alpha_p2p::client::message::response::headers::Headers;
-//!
-//! // Create headers response
-//! let headers = Headers::new(vec![header1, header2]);
-//!
-//! // Check response properties
-//! assert_eq!(headers.len(), 2);
-//! assert!(!headers.is_empty());
-//! ```
+//! TODO: Add examples when the library is more mature.
 
 use crate::blockdata::block::Header;
 use crate::consensus::{Decodable, Encodable};

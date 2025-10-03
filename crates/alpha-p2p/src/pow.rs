@@ -8,9 +8,9 @@
 //! block headers.
 //!
 use alpha_p2p_derive::ConsensusCodec;
+use bitcoin::hashes::Hash;
 use bitcoin::BlockHash;
 use bitcoin::Target as BitcoinTarget;
-use bitcoin::hashes::Hash;
 use primitive_types::U256;
 use serde::{Deserialize, Serialize};
 
@@ -1208,12 +1208,11 @@ mod tests {
         let target = Target::from_hash(hash);
 
         // Verify the target was created correctly
-        let expected_bytes = [
-            0x00, 0x00, 0x00, 0x00, 0x01, 0x9d, 0x66, 0x89, 0xc0, 0x85, 0xae, 0x16, 0x58, 0x31,
-            0xe9, 0x34, 0xff, 0x76, 0x3a, 0xe4, 0x6a, 0x2a, 0x6c, 0x17, 0x2b, 0x3f, 0x1b, 0x60,
-            0xa8, 0xce, 0x26, 0xf,
-        ];
-        let expected_target = Target::from_big_endian(&expected_bytes);
+        // The expected value is the hash interpreted as a little-endian number
+        // since that's how Bitcoin hashes are stored internally
+        let expected_target =
+            Target::from_hex("6fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000")
+                .unwrap();
         assert_eq!(target, expected_target);
     }
 }

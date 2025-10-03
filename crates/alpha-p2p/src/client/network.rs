@@ -501,6 +501,13 @@ mod tests {
 
         // Verify the payload size (9 bytes: 1 for announce, 8 for version)
         assert_eq!(network_msg.header.length, 9);
+
+        // Verify the exact serialized bytes
+        let expected_bytes = [
+            11, 17, 9, 7, 115, 101, 110, 100, 99, 109, 112, 99, 116, 0, 0, 0, 9, 0, 0, 0, 204, 254,
+            16, 74, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        assert_eq!(bytes, expected_bytes);
     }
 
     #[test]
