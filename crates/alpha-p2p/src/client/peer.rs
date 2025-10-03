@@ -4,6 +4,7 @@
 //! and manage connections to other nodes in the Alpha network.
 
 use std::net;
+
 use tracing_subscriber::fmt::time::ChronoLocal;
 
 /// The connection kind of the peer.

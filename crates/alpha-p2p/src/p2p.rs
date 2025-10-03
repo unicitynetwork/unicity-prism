@@ -2,24 +2,27 @@ pub(crate) mod address;
 /// P2P protocol message types and functionality.
 pub mod message;
 
-use crate::consensus::Params;
-use crate::consensus::{Decodable, Encodable};
-use crate::io::{Error as IoError, Read, Write};
-use crate::network::Network;
 pub use bitcoin::p2p::ServiceFlags;
 use thiserror::Error;
 
-/// Network magic bytes to identify the cryptocurrency network the message was intended for.
+use crate::{
+    consensus::{Decodable, Encodable, Params},
+    io::{Error as IoError, Read, Write},
+    network::Network,
+};
+
+/// Network magic bytes to identify the cryptocurrency network the message was
+/// intended for.
 #[derive(Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct Magic([u8; 4]);
 
 impl Magic {
     /// Unicity main network magic bytes.
     pub const MAINNET: Self = Self([0xd9, 0xb4, 0xbe, 0xf9]);
-    /// Unicity test network magic bytes.
-    pub const TESTNET: Self = Self([0x0B, 0x11, 0x09, 0x07]);
     /// Unicity regression test network magic bytes.
     pub const REGTEST: Self = Self([0xc9, 0xaf, 0xae, 0xe9]);
+    /// Unicity test network magic bytes.
+    pub const TESTNET: Self = Self([0x0B, 0x11, 0x09, 0x07]);
 
     /// Returns the magic bytes as a 4-byte array.
     ///

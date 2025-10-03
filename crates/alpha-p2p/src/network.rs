@@ -1,7 +1,9 @@
-use crate::p2p::Magic;
-use bitcoin::constants::ChainHash;
 use std::str::FromStr;
+
+use bitcoin::constants::ChainHash;
 use thiserror::Error;
+
+use crate::p2p::Magic;
 
 /// Errors that can occur when parsing a chain type.
 #[derive(Clone, Debug, Error)]

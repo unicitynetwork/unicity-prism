@@ -1,27 +1,33 @@
 //! Block synchronization implementation for Bitcoin P2P protocol.
 //!
-//! This module provides functionality for synchronizing blockchain data with peers,
-//! including requesting block headers using GetHeaders and downloading full blocks
-//! using GetData messages.
+//! This module provides functionality for synchronizing blockchain data with
+//! peers, including requesting block headers using GetHeaders and downloading
+//! full blocks using GetData messages.
 
-use crate::blockdata::block::{BlockHash, Header};
-use crate::client::connection::{ConnectionError, ConnectionManager};
-use crate::client::message::get_data::{GetData, Inventory};
-use crate::client::message::request::GetHeaders;
-use crate::client::message::response::block::Block;
-use crate::client::message::response::Headers;
-use crate::client::message::{Message, Request, Response};
-use crate::hashes::Hash;
-use std::collections::HashSet;
-use std::sync::Arc;
-use tokio::net::TcpStream;
-use tokio::sync::RwLock;
+use std::{collections::HashSet, sync::Arc};
+
+use tokio::{net::TcpStream, sync::RwLock};
 use tracing::{debug, info, warn};
+
+use crate::{
+    blockdata::block::{BlockHash, Header},
+    client::{
+        connection::{ConnectionError, ConnectionManager},
+        message::{
+            Message, Request, Response,
+            get_data::{GetData, Inventory},
+            request::GetHeaders,
+            response::{Headers, block::Block},
+        },
+    },
+    hashes::Hash,
+};
 
 /// Configuration for block synchronization.
 #[derive(Debug, Clone, Copy)]
 pub struct SyncConfig {
-    /// Maximum number of block headers to request in a single GetHeaders message.
+    /// Maximum number of block headers to request in a single GetHeaders
+    /// message.
     pub max_headers_per_request: usize,
     /// Maximum number of blocks to download.
     pub max_blocks_to_download: usize,

@@ -1,12 +1,14 @@
-//! Requests one or more data objects from another node. The objects are requested by an
-//! inventory, which the requesting node typically received previously by way of an `inv`
-//! message.
+//! Requests one or more data objects from another node. The objects are
+//! requested by an inventory, which the requesting node typically received
+//! previously by way of an `inv` message.
 //!
-//! This struct implements the `GetData` message type used in the Alpha protocol to request
-//! specific data objects (like blocks or transactions) from peer nodes.
+//! This struct implements the `GetData` message type used in the Alpha protocol
+//! to request specific data objects (like blocks or transactions) from peer
+//! nodes.
 //!
-//! The message contains a list of inventory vectors that specify which objects are being requested.
-//! Each inventory vector specifies the type and hash of the object to be retrieved.
+//! The message contains a list of inventory vectors that specify which objects
+//! are being requested. Each inventory vector specifies the type and hash of
+//! the object to be retrieved.
 //!
 //! # Example
 //!
@@ -27,18 +29,21 @@
 //! assert_eq!(get_data.inventories().len(), 2);
 //! ```
 
-pub(crate) use super::inventory::{Inventory, InventoryList};
 use alpha_p2p_derive::ConsensusCodec;
 
-/// Requests one or more data objects from another node. The objects are requested by an
-/// inventory, which the requesting node typically received previously by way of an `inv`
-/// message.
+pub(crate) use super::inventory::{Inventory, InventoryList};
+
+/// Requests one or more data objects from another node. The objects are
+/// requested by an inventory, which the requesting node typically received
+/// previously by way of an `inv` message.
 ///
-/// This struct implements the `GetData` message type used in the Alpha protocol to request
-/// specific data objects (like blocks or transactions) from peer nodes.
+/// This struct implements the `GetData` message type used in the Alpha protocol
+/// to request specific data objects (like blocks or transactions) from peer
+/// nodes.
 ///
-/// The message contains a list of inventory vectors that specify which objects are being requested.
-/// Each inventory vector specifies the type and hash of the object to be retrieved.
+/// The message contains a list of inventory vectors that specify which objects
+/// are being requested. Each inventory vector specifies the type and hash of
+/// the object to be retrieved.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, ConsensusCodec)]
 pub struct GetData {
     /// The list of inventory vectors being requested.
@@ -188,7 +193,8 @@ impl GetData {
     ///
     /// # Returns
     ///
-    /// * `GetData` - A new instance of the GetData message with an empty list of inventories.
+    /// * `GetData` - A new instance of the GetData message with an empty list
+    ///   of inventories.
     ///
     /// # Example
     ///
@@ -208,9 +214,11 @@ impl GetData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blockdata::{block::BlockHash, transaction::Txid};
-    use crate::consensus::{Decodable, Encodable};
-    use crate::util::{hex_to_blockhash, hex_to_txid};
+    use crate::{
+        blockdata::{block::BlockHash, transaction::Txid},
+        consensus::{Decodable, Encodable},
+        util::{hex_to_blockhash, hex_to_txid},
+    };
 
     #[test]
     fn test_get_data_roundtrip() -> Result<(), Box<dyn std::error::Error>> {

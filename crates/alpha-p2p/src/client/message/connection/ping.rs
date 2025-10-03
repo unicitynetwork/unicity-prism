@@ -1,5 +1,5 @@
 use alpha_p2p_derive::ConsensusCodec;
-use rand::{rng, RngCore};
+use rand::{RngCore, rng};
 
 /// Represents a Ping message in the P2P protocol.
 ///
@@ -67,7 +67,8 @@ impl Ping {
     ///
     /// # Arguments
     ///
-    /// * `rng` - A mutable reference to a random number generator implementing the `rand::Rng` trait.
+    /// * `rng` - A mutable reference to a random number generator implementing
+    ///   the `rand::Rng` trait.
     ///
     /// # Returns
     ///
@@ -105,8 +106,9 @@ impl Default for Ping {
 
 #[cfg(test)]
 mod tests {
-    use super::Ping;
     use bitcoin::consensus::{Decodable, Encodable};
+
+    use super::Ping;
 
     #[test]
     fn test_ping_new() {

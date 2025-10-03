@@ -1,25 +1,27 @@
 //! Block header implementations.
 //!
-//! This module provides implementations of block headers for different blockchain types.
-//! Currently supported:
+//! This module provides implementations of block headers for different
+//! blockchain types. Currently supported:
 //! - Bitcoin-compatible headers (wrapping Bitcoin's standard header)
 //! - RandomX headers (for RandomX-based proof of work)
 
 pub mod bitcoin;
 pub mod randomx;
 
-use crate::blockdata::block::ValidationError;
-use ::bitcoin::BlockHash;
-use ::bitcoin::consensus::{Decodable, Encodable};
+use ::bitcoin::{
+    BlockHash,
+    consensus::{Decodable, Encodable},
+};
 pub use bitcoin::BitcoinHeader;
 pub use randomx::RandomXHeader;
 
-use crate::pow::Target;
+use crate::{blockdata::block::ValidationError, pow::Target};
 
 /// Common trait for block headers.
 ///
-/// This trait defines the interface that all block header implementations must follow.
-/// It provides methods for accessing common header fields and validating proof of work.
+/// This trait defines the interface that all block header implementations must
+/// follow. It provides methods for accessing common header fields and
+/// validating proof of work.
 pub trait Header:
     Copy + Clone + PartialEq + Eq + std::fmt::Debug + Send + Sync + Encodable + Decodable
 {
@@ -45,11 +47,13 @@ pub trait Header:
     ///
     /// # Arguments
     ///
-    /// * `required_target` - The target that the block hash must be below to be valid
+    /// * `required_target` - The target that the block hash must be below to be
+    ///   valid
     ///
     /// # Returns
     ///
-    /// * `Ok(BlockHash)` - If the proof of work is valid, returns the block hash
+    /// * `Ok(BlockHash)` - If the proof of work is valid, returns the block
+    ///   hash
     /// * `Err(ValidationError)` - If the proof of work is invalid
     fn validate_pow(&self, required_target: Target) -> Result<BlockHash, ValidationError>;
 }

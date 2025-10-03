@@ -1,24 +1,22 @@
 //!
 //! This module defines the Target and CompactTarget types used for representing
-//! difficulty targets in blockchain systems, particularly in the Unicity Alpha network.
+//! difficulty targets in blockchain systems, particularly in the Unicity Alpha
+//! network.
 //!
-//! A Target is a 256-bit value that represents the difficulty threshold for mining
-//! a block. The lower the target, the higher the difficulty. CompactTarget is an
-//! encoded representation of this target that fits into a 32-bit value, used in
-//! block headers.
-//!
+//! A Target is a 256-bit value that represents the difficulty threshold for
+//! mining a block. The lower the target, the higher the difficulty.
+//! CompactTarget is an encoded representation of this target that fits into a
+//! 32-bit value, used in block headers.
 use alpha_p2p_derive::ConsensusCodec;
-use bitcoin::hashes::Hash;
-use bitcoin::BlockHash;
-use bitcoin::Target as BitcoinTarget;
+use bitcoin::{BlockHash, Target as BitcoinTarget, hashes::Hash};
 use primitive_types::U256;
 use serde::{Deserialize, Serialize};
 
 /// Represents a target value expressed as an unsigned 256-bit integer.
 ///
-/// This struct provides a type-safe wrapper around `U256` (unsigned 256-bit integer)
-/// to represent target values, commonly used in cryptographic contexts such as
-/// Alpha's mining difficulty calculations or similar systems.
+/// This struct provides a type-safe wrapper around `U256` (unsigned 256-bit
+/// integer) to represent target values, commonly used in cryptographic contexts
+/// such as Alpha's mining difficulty calculations or similar systems.
 ///
 /// # Example
 ///
@@ -69,7 +67,8 @@ impl Target {
     ///
     /// # Arguments
     ///
-    /// * `hex_str` - A hexadecimal string representation of the 256-bit target value
+    /// * `hex_str` - A hexadecimal string representation of the 256-bit target
+    ///   value
     ///
     /// # Returns
     ///
@@ -101,13 +100,15 @@ impl Target {
         Target(U256::from_big_endian(hash.as_byte_array()))
     }
 
-    /// Creates a new `Target` for the mainnet/testnet max target in a const context.
+    /// Creates a new `Target` for the mainnet/testnet max target in a const
+    /// context.
     ///
     /// # Returns
     ///
     /// A new `Target` instance with the mainnet/testnet max target value
     pub const fn mainnet_max_target() -> Self {
-        // Mainnet and testnet max target: 0x00000000ffff0000000000000000000000000000000000000000000000000000
+        // Mainnet and testnet max target:
+        // 0x00000000ffff0000000000000000000000000000000000000000000000000000
         Target(U256([0x00000000, 0x00000000, 0x00000000, 0x00000000]))
     }
 
@@ -117,7 +118,8 @@ impl Target {
     ///
     /// A new `Target` instance with the regtest max target value
     pub const fn regtest_max_target() -> Self {
-        // Regtest max target: 0x7fffff00000000000000000000000000000000000000000000000000000000
+        // Regtest max target:
+        // 0x7fffff00000000000000000000000000000000000000000000000000000000
         Target(U256([0x00000000, 0x00000000, 0x00000000, 0x7fffff00]))
     }
 
@@ -140,8 +142,8 @@ impl Target {
     ///
     /// # Arguments
     ///
-    /// * `bytes` - An array of 32 bytes representing the big-endian byte representation
-    ///   of a 256-bit target value
+    /// * `bytes` - An array of 32 bytes representing the big-endian byte
+    ///   representation of a 256-bit target value
     ///
     /// # Returns
     ///
@@ -167,11 +169,13 @@ impl Target {
         Self(U256::from_big_endian(bytes))
     }
 
-    /// Creates a new instance of `Target` with a zero-valued underlying `U256` integer.
+    /// Creates a new instance of `Target` with a zero-valued underlying `U256`
+    /// integer.
     ///
-    /// This constructor initializes the `Target` struct with a default value of zero,
-    /// which is useful for representing null or uninitialized target states in blockchain
-    /// contexts where `U256` values are used for cryptographic computations.
+    /// This constructor initializes the `Target` struct with a default value of
+    /// zero, which is useful for representing null or uninitialized target
+    /// states in blockchain contexts where `U256` values are used for
+    /// cryptographic computations.
     ///
     /// # Returns
     ///
@@ -189,23 +193,28 @@ impl Target {
         Target(U256::zero())
     }
 
-    /// Calculates the difficulty of the current target relative to a maximum attainable target.
+    /// Calculates the difficulty of the current target relative to a maximum
+    /// attainable target.
     ///
-    /// This function computes the mining difficulty by dividing the maximum attainable target
-    /// by the current target. The result represents how much harder it is to mine a block
-    /// with the current target compared to the maximum possible difficulty.
+    /// This function computes the mining difficulty by dividing the maximum
+    /// attainable target by the current target. The result represents how
+    /// much harder it is to mine a block with the current target compared
+    /// to the maximum possible difficulty.
     ///
     /// # Arguments
-    /// * `max_attainable_target` - The maximum target value that can be achieved (typically
-    ///   the network's maximum difficulty target)
+    /// * `max_attainable_target` - The maximum target value that can be
+    ///   achieved (typically the network's maximum difficulty target)
     ///
     /// # Returns
     /// * `Some(u128)` - The calculated difficulty as a 128-bit unsigned integer
-    /// * `None` - When the division would overflow or when the current target is zero
+    /// * `None` - When the division would overflow or when the current target
+    ///   is zero
     ///
     /// # Notes
-    /// - Caps the result at `u128::MAX` when the calculated difficulty exceeds u128 bounds
-    /// - The calculation assumes that both targets are valid and represent the same units
+    /// - Caps the result at `u128::MAX` when the calculated difficulty exceeds
+    ///   u128 bounds
+    /// - The calculation assumes that both targets are valid and represent the
+    ///   same units
     ///
     /// # Example
     ///
@@ -238,19 +247,22 @@ impl Target {
     /// Converts the difficulty value to a floating-point representation
     ///
     /// This method takes a maximum attainable target and attempts to calculate
-    /// the difficulty of the current object (likely a blockchain block or similar)
-    /// as an f64 value. If the calculation cannot be performed (returns None),
-    /// this method will return None as well.
+    /// the difficulty of the current object (likely a blockchain block or
+    /// similar) as an f64 value. If the calculation cannot be performed
+    /// (returns None), this method will return None as well.
     ///
     /// # Arguments
     ///
-    /// * `max_attainable_target` - The maximum target value that can be achieved,
-    ///   typically representing the highest difficulty threshold in blockchain contexts
+    /// * `max_attainable_target` - The maximum target value that can be
+    ///   achieved, typically representing the highest difficulty threshold in
+    ///   blockchain contexts
     ///
     /// # Returns
     ///
-    /// * `Some(f64)` - The difficulty value as a floating-point number if calculation succeeds
-    /// * `None` - If the difficulty calculation cannot be performed or is not valid
+    /// * `Some(f64)` - The difficulty value as a floating-point number if
+    ///   calculation succeeds
+    /// * `None` - If the difficulty calculation cannot be performed or is not
+    ///   valid
     ///
     /// # Example
     ///
@@ -271,13 +283,15 @@ impl Target {
 
     /// Converts the target to a work value.
     ///
-    /// Work is the inverse of the target value, representing the expected number
-    /// of hash attempts required to find a valid block hash below the target.
+    /// Work is the inverse of the target value, representing the expected
+    /// number of hash attempts required to find a valid block hash below
+    /// the target.
     ///
     /// # Returns
     ///
     /// * `Some(Work)` - The calculated work value
-    /// * `None` - If the calculation fails (should not happen for valid targets)
+    /// * `None` - If the calculation fails (should not happen for valid
+    ///   targets)
     pub fn to_work(self) -> Option<Work> {
         // Handle edge cases
         if self.0.is_zero() {
@@ -322,8 +336,8 @@ impl Target {
     /// # Returns
     ///
     /// * `Some(Target)` - The parsed target value if valid
-    /// * `None` - If the compact representation is invalid (e.g., zero mantissa,
-    ///   invalid exponent, or overflow during calculation)
+    /// * `None` - If the compact representation is invalid (e.g., zero
+    ///   mantissa, invalid exponent, or overflow during calculation)
     ///
     /// # Validity Checks
     ///
@@ -392,24 +406,27 @@ impl Target {
 
     /// Converts a target value into its compact representation.
     ///
-    /// This function transforms a target value into a format suitable for use in
-    /// blockchain protocols, particularly where targets are represented with an 8-bit size field
-    /// and a 24-bit mantissa, packed into a 32-bit value.
+    /// This function transforms a target value into a format suitable for use
+    /// in blockchain protocols, particularly where targets are represented
+    /// with an 8-bit size field and a 24-bit mantissa, packed into a 32-bit
+    /// value.
     ///
     /// The conversion follows these rules:
-    /// - Zero is handled specially, returning the standard compact representation of zero.
-    /// - The most significant bit position determines the size in bytes needed to represent
-    ///   the value, which is then rounded up to the nearest byte.
-    /// - The resulting size is capped at 255 bytes for compatibility with the compact format's
-    ///   8-bit size field.
+    /// - Zero is handled specially, returning the standard compact
+    ///   representation of zero.
+    /// - The most significant bit position determines the size in bytes needed
+    ///   to represent the value, which is then rounded up to the nearest byte.
+    /// - The resulting size is capped at 255 bytes for compatibility with the
+    ///   compact format's 8-bit size field.
     ///
-    /// For large numbers, the most significant bits are extracted and right-shifted to
-    /// form the mantissa. If the high bit of the resulting mantissa is set, this indicates
-    /// overflow and leads to normalization: the mantissa is right-shifted by 8 bits and the
-    /// size is incremented.
+    /// For large numbers, the most significant bits are extracted and
+    /// right-shifted to form the mantissa. If the high bit of the resulting
+    /// mantissa is set, this indicates overflow and leads to normalization:
+    /// the mantissa is right-shifted by 8 bits and the size is incremented.
     ///
-    /// Returns `None` in cases of overflow during calculations or when the number requires
-    /// more than 255 bytes to represent, which is outside the valid range.
+    /// Returns `None` in cases of overflow during calculations or when the
+    /// number requires more than 255 bytes to represent, which is outside
+    /// the valid range.
     ///
     /// # Returns
     ///
@@ -499,7 +516,8 @@ impl Target {
     ///
     /// # Returns
     ///
-    /// * `[u8; 32]` - A 32-byte array containing the big-endian representation of the target.
+    /// * `[u8; 32]` - A 32-byte array containing the big-endian representation
+    ///   of the target.
     #[allow(dead_code)]
     fn to_big_endian(self) -> [u8; 32] {
         self.0.to_big_endian()
@@ -582,8 +600,9 @@ impl Work {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::str::FromStr;
+
+    use super::*;
 
     #[test]
     fn test_zero_target() {
@@ -594,7 +613,8 @@ mod tests {
     #[test]
     fn test_genesis_block_target() {
         // Genesis block nBits: 0x1d00ffff
-        // This should convert to target: 0x00000000ffff0000000000000000000000000000000000000000000000000000
+        // This should convert to target:
+        // 0x00000000ffff0000000000000000000000000000000000000000000000000000
         let expected_compact = 0x1d00ffff;
 
         // Create the target from the known formula: 0x00ffff * 256^(0x1d - 3)
@@ -630,7 +650,8 @@ mod tests {
     #[test]
     fn test_real_block_example() {
         // Real Bitcoin block example from documentation
-        // Block height 100000: "bits" : "1b04864c", target should be 0x04864c * 256^(0x1b - 3)
+        // Block height 100000: "bits" : "1b04864c", target should be 0x04864c *
+        // 256^(0x1b - 3)
         let expected_compact = 0x1b04864c;
 
         // Calculate expected target: 0x04864c * 256^(0x1b - 3) = 0x04864c * 256^24
@@ -888,7 +909,8 @@ mod tests {
         let work = target.to_work().unwrap();
 
         // Bitcoin Core formula: 2^256 / (target + 1)
-        // Expected work: 0x0000000000000000000000000000000000000000000000000000000100010001
+        // Expected work:
+        // 0x0000000000000000000000000000000000000000000000000000000100010001
         let expected_work = U256::from_str_radix(
             "0000000000000000000000000000000000000000000000000000000100010001",
             16,
@@ -959,7 +981,8 @@ mod tests {
 
     #[test]
     fn test_target_value_65536() {
-        // Test target = 65536 using Bitcoin Core formula: 2^256 / (65536 + 1) = 2^256 / 65537
+        // Test target = 65536 using Bitcoin Core formula: 2^256 / (65536 + 1) = 2^256 /
+        // 65537
         let target = Target::new(U256::from(65536u64));
         let work = target.to_work().unwrap();
 
@@ -1072,7 +1095,8 @@ mod tests {
         let target = Target::new(large_target);
         let work = target.to_work().unwrap();
 
-        // Expected work: 0x00000000000000000000000000000000000000000000000000000000000f423f
+        // Expected work:
+        // 0x00000000000000000000000000000000000000000000000000000000000f423f
         let expected_work = U256::from_str_radix(
             "00000000000000000000000000000000000000000000000000000000000f423f",
             16,
@@ -1128,7 +1152,8 @@ mod tests {
 
         assert_eq!(double_work_2000, expected_double_work_2000);
 
-        // Verify work_1000 is NOT exactly double work_2000 (due to the +1 in denominator)
+        // Verify work_1000 is NOT exactly double work_2000 (due to the +1 in
+        // denominator)
         assert_ne!(work_1000.0, double_work_2000);
 
         // Verify work_1000 is slightly less than 2*work_2000 because:
@@ -1139,8 +1164,8 @@ mod tests {
 
     #[test]
     fn test_formula_equivalence_exact() {
-        // Test that our implementation produces exactly the same results as Bitcoin Core formula
-        // for a comprehensive set of values
+        // Test that our implementation produces exactly the same results as Bitcoin
+        // Core formula for a comprehensive set of values
         let test_values = [
             2u64, 3u64, 5u64, 7u64, 11u64, 13u64, 17u64, 19u64, 23u64, 29u64,
         ];

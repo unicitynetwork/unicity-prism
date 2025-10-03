@@ -1,15 +1,17 @@
 use alpha_p2p_derive::ConsensusCodec;
 
-/// A Pong message used in peer-to-peer communication to respond to a Ping message.
-/// The Pong message contains a nonce that matches the nonce from the corresponding Ping message,
-/// allowing the sender to verify that the Pong is a response to their Ping.
+/// A Pong message used in peer-to-peer communication to respond to a Ping
+/// message. The Pong message contains a nonce that matches the nonce from the
+/// corresponding Ping message, allowing the sender to verify that the Pong is a
+/// response to their Ping.
 ///
-/// This message is part of the connection management in the Alpha protocol, helping to maintain
-/// active connections between peers.
+/// This message is part of the connection management in the Alpha protocol,
+/// helping to maintain active connections between peers.
 ///
 /// # Arguments
 ///
-/// * `nonce` - A unique identifier for the pong message, typically matching the nonce from a Ping message.
+/// * `nonce` - A unique identifier for the pong message, typically matching the
+///   nonce from a Ping message.
 ///
 /// # Example
 ///
@@ -30,7 +32,8 @@ impl Pong {
     ///
     /// # Arguments
     ///
-    /// * `nonce` - A unique identifier for the pong message, typically matching the nonce from a Ping message.
+    /// * `nonce` - A unique identifier for the pong message, typically matching
+    ///   the nonce from a Ping message.
     ///
     /// # Returns
     ///
@@ -71,11 +74,13 @@ impl Pong {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::io::Cursor;
+
     use bitcoin::consensus::{Decodable, Encodable};
     use hex;
     use rand::{RngCore, rng};
-    use std::io::Cursor;
+
+    use super::*;
 
     #[test]
     fn test_pong_new() {

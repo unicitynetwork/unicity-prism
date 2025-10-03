@@ -1,31 +1,36 @@
 //! Not found response message types for the P2P protocol.
 //!
-//! This module contains the not found response message implementation, which is used
-//! to send information about missing data from peers in response to `getdata` requests.
+//! This module contains the not found response message implementation, which is
+//! used to send information about missing data from peers in response to
+//! `getdata` requests.
 //!
 //! # Usage
 //!
-//! The `NotFound` message is sent when a peer requests data (like blocks or transactions)
-//! that it doesn't have available. It contains the inventory vectors of the requested
-//! items that were not found, allowing peers to understand what data is missing.
+//! The `NotFound` message is sent when a peer requests data (like blocks or
+//! transactions) that it doesn't have available. It contains the inventory
+//! vectors of the requested items that were not found, allowing peers to
+//! understand what data is missing.
 //!
 //! # Consensus Encoding
 //!
-//! The `NotFound` struct manually implements `Encodable` and `Decodable` traits,
-//! allowing it to be encoded and decoded according to Bitcoin's consensus rules.
+//! The `NotFound` struct manually implements `Encodable` and `Decodable`
+//! traits, allowing it to be encoded and decoded according to Bitcoin's
+//! consensus rules.
 //!
 //! # Examples
 //!
 //! TODO: Add examples when the library is more mature.
 
-use crate::client::message::inventory::Inventory;
-use crate::consensus::{Decodable, Encodable};
+use crate::{
+    client::message::inventory::Inventory,
+    consensus::{Decodable, Encodable},
+};
 
 /// Represents a not found response message in the P2P protocol.
 ///
-/// A `NotFound` response is sent when a peer requests data (like blocks or transactions)
-/// that it doesn't have available. It contains the inventory vectors of the requested
-/// items that were not found.
+/// A `NotFound` response is sent when a peer requests data (like blocks or
+/// transactions) that it doesn't have available. It contains the inventory
+/// vectors of the requested items that were not found.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NotFound {
     /// A list of inventory vectors representing the items that were not found.
@@ -33,7 +38,8 @@ pub struct NotFound {
 }
 
 impl NotFound {
-    /// Creates a new `NotFound` response message with the specified inventories.
+    /// Creates a new `NotFound` response message with the specified
+    /// inventories.
     ///
     /// # Arguments
     ///
@@ -68,7 +74,8 @@ impl NotFound {
     ///
     /// # Returns
     ///
-    /// * `bool` - True if the response contains no inventories, false otherwise.
+    /// * `bool` - True if the response contains no inventories, false
+    ///   otherwise.
     pub fn is_empty(&self) -> bool {
         self.inventories.is_empty()
     }
@@ -125,11 +132,12 @@ impl Decodable for NotFound {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blockdata::block::BlockHash;
-    use crate::blockdata::transaction::Txid;
-    use crate::client::message::inventory::Inventory;
-    use crate::consensus::{Decodable, Encodable};
-    use crate::hashes::Hash;
+    use crate::{
+        blockdata::{block::BlockHash, transaction::Txid},
+        client::message::inventory::Inventory,
+        consensus::{Decodable, Encodable},
+        hashes::Hash,
+    };
 
     #[test]
     fn test_not_found_new() {

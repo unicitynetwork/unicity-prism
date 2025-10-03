@@ -3,3 +3,21 @@ max_width = 100
 
 # Reorder imports alphabetically
 reorder_imports = true
+
+# Wrap comments to fit within the max width
+wrap_comments = true
+
+# Reorder implementation items alphabetically
+reorder_impl_items = true
+
+# Group imports into a single line where possible
+#group_imports = "One"
+
+# Group the imports by their source (std, external crates, local modules)
+group_imports = "StdExternalCrate"
+
+# Use the new `format_strings` feature to format strings
+format_strings = true
+
+# Set the granularity of imports to "Item" to avoid wildcard imports
+imports_granularity = "Crate"

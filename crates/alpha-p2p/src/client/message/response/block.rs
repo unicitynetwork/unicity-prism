@@ -7,28 +7,34 @@
 //!
 //! The P2P protocol supports two types of block responses:
 //! - `StandardBlock`: Contains full block data without witness information
-//! - `WitnessBlock`: Contains full block data with witness information for transaction verification
+//! - `WitnessBlock`: Contains full block data with witness information for
+//!   transaction verification
 //!
 //! # Usage
 //!
-//! Block response messages are used to send block data from peers in response to
-//! `getblocks` or `getdata` requests. The `Block` trait provides a unified interface
-//! for handling both standard and witness blocks.
+//! Block response messages are used to send block data from peers in response
+//! to `getblocks` or `getdata` requests. The `Block` trait provides a unified
+//! interface for handling both standard and witness blocks.
 //!
 //! # Consensus Encoding
 //!
-//! Both `StandardBlock` and `WitnessBlock` implement the `ConsensusCodec` derive,
-//! allowing them to be encoded and decoded according to Bitcoin's consensus rules.
+//! Both `StandardBlock` and `WitnessBlock` implement the `ConsensusCodec`
+//! derive, allowing them to be encoded and decoded according to Bitcoin's
+//! consensus rules.
 //!
 //! # Examples
 //!
 //! TODO: Add examples when the library is more mature.
 
-use crate::blockdata::block::{Header, WitnessMerkleNode};
-use crate::blockdata::transaction::Transaction;
 use alpha_p2p_derive::ConsensusCodec;
 
-/// Trait for block response messages to allow type-safe handling of both witness and non-witness blocks.
+use crate::blockdata::{
+    block::{Header, WitnessMerkleNode},
+    transaction::Transaction,
+};
+
+/// Trait for block response messages to allow type-safe handling of both
+/// witness and non-witness blocks.
 pub trait Block<H: Header>: Send + Sync {
     /// Returns the block header.
     fn header(&self) -> &H;
@@ -44,7 +50,8 @@ pub trait Block<H: Header>: Send + Sync {
 /// - A list of transactions contained in the block
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ConsensusCodec)]
 pub struct StandardBlock<H: Header> {
-    /// The block header containing metadata like timestamp and previous block hash
+    /// The block header containing metadata like timestamp and previous block
+    /// hash
     pub header: H,
 
     /// List of transactions contained in the block
@@ -53,7 +60,8 @@ pub struct StandardBlock<H: Header> {
 
 #[allow(dead_code)]
 impl<H: Header> StandardBlock<H> {
-    /// Creates a new `StandardBlock` response message with the specified header and transactions.
+    /// Creates a new `StandardBlock` response message with the specified header
+    /// and transactions.
     ///
     /// # Arguments
     ///
@@ -62,7 +70,8 @@ impl<H: Header> StandardBlock<H> {
     ///
     /// # Returns
     ///
-    /// * `StandardBlock` - A new instance of the StandardBlock response message.
+    /// * `StandardBlock` - A new instance of the StandardBlock response
+    ///   message.
     pub fn new(header: H, transactions: Vec<Transaction>) -> Self {
         Self {
             header,
@@ -103,15 +112,16 @@ impl<H: Header> Block<H> for StandardBlock<H> {
 
 /// Represents a witness block response message in the P2P protocol.
 ///
-/// A `WitnessBlock` response contains the full block data with witness information,
-/// including:
+/// A `WitnessBlock` response contains the full block data with witness
+/// information, including:
 /// - The block header
-/// - A list of transactions contained in the block  
+/// - A list of transactions contained in the block
 /// - Witness root for transaction witness data verification
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ConsensusCodec)]
 #[allow(dead_code)]
 pub struct WitnessBlock<H: Header> {
-    /// The block header containing metadata like timestamp and previous block hash
+    /// The block header containing metadata like timestamp and previous block
+    /// hash
     pub header: H,
 
     /// List of transactions contained in the block
@@ -123,13 +133,15 @@ pub struct WitnessBlock<H: Header> {
 
 #[allow(dead_code)]
 impl<H: Header> WitnessBlock<H> {
-    /// Creates a new `WitnessBlock` response message with the specified header, transactions and witness root.
+    /// Creates a new `WitnessBlock` response message with the specified header,
+    /// transactions and witness root.
     ///
     /// # Arguments
     ///
     /// * `header` - The block header.
     /// * `transactions` - A vector of transactions contained in the block.
-    /// * `witness_root` - The witness root for transaction witness data verification.
+    /// * `witness_root` - The witness root for transaction witness data
+    ///   verification.
     ///
     /// # Returns
     ///
@@ -166,21 +178,25 @@ impl<H: Header> Block<H> for WitnessBlock<H> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::blockdata::block::{BitcoinHeader, WitnessMerkleNode};
-    use crate::blockdata::transaction::Transaction;
-    use crate::consensus::{Decodable, Encodable};
-    use crate::hashes::Hash;
-    use bitcoin::block::Version;
     pub use bitcoin::blockdata::block::Header as InnerBitcoinHeader;
-    use bitcoin::pow::CompactTarget;
-    use bitcoin::{BlockHash, TxMerkleNode};
+    use bitcoin::{BlockHash, TxMerkleNode, block::Version, pow::CompactTarget};
+
+    use super::*;
+    use crate::{
+        blockdata::{
+            block::{BitcoinHeader, WitnessMerkleNode},
+            transaction::Transaction,
+        },
+        consensus::{Decodable, Encodable},
+        hashes::Hash,
+    };
 
     /// Create a minimal test transaction for use in tests
     fn create_test_transaction() -> Transaction {
         // Create a minimal valid transaction using the bitcoin crate types
+        use bitcoin::{Amount, ScriptBuf, Sequence, TxIn, TxOut, locktime::absolute};
+
         use crate::blockdata::transaction::Version;
-        use bitcoin::{locktime::absolute, Amount, ScriptBuf, Sequence, TxIn, TxOut};
 
         let txin = TxIn {
             previous_output: bitcoin::OutPoint::null(),
@@ -208,7 +224,9 @@ mod tests {
             prev_blockhash: BlockHash::all_zeros(),
             merkle_root: TxMerkleNode::all_zeros(),
             time: 0,
-            bits: CompactTarget::from_consensus(0x1d00ffff), // Use the compact bits value directly (Bitcoin genesis block difficulty)
+            bits: CompactTarget::from_consensus(0x1d00ffff), /* Use the compact bits value
+                                                              * directly (Bitcoin genesis block
+                                                              * difficulty) */
             nonce: 1,
         }
         .into()
@@ -220,7 +238,9 @@ mod tests {
             prev_blockhash: BlockHash::all_zeros(),
             merkle_root: TxMerkleNode::all_zeros(),
             time: 0,
-            bits: CompactTarget::from_consensus(0x1d00ffff), // Use the compact bits value directly (Bitcoin genesis block difficulty)
+            bits: CompactTarget::from_consensus(0x1d00ffff), /* Use the compact bits value
+                                                              * directly (Bitcoin genesis block
+                                                              * difficulty) */
             nonce,
         }
         .into()

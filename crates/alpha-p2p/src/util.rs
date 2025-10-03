@@ -1,6 +1,7 @@
-use crate::hashes::Hash;
 use bitcoin::{BlockHash, Txid};
 use hex::FromHex;
+
+use crate::hashes::Hash;
 
 /// Convert a hex string to a Bitcoin hash type.
 pub fn hex_to_hash<T>(hex: &str) -> Result<T, hex::FromHexError>
@@ -12,14 +13,16 @@ where
 }
 
 /// Convert a hex string to a Txid.
-/// The hex string can be in either display format (little-endian) or internal format (big-endian).
+/// The hex string can be in either display format (little-endian) or internal
+/// format (big-endian).
 pub fn hex_to_txid(hex: &str) -> Result<Txid, hex::FromHexError> {
     let bytes = <[u8; 32]>::from_hex(hex)?;
     Ok(Txid::from_byte_array(bytes))
 }
 
 /// Convert a hex string to a BlockHash.
-/// The hex string can be in either display format (little-endian) or internal format (big-endian).
+/// The hex string can be in either display format (little-endian) or internal
+/// format (big-endian).
 pub fn hex_to_blockhash(hex: &str) -> Result<BlockHash, hex::FromHexError> {
     let bytes = <[u8; 32]>::from_hex(hex)?;
     Ok(BlockHash::from_byte_array(bytes))

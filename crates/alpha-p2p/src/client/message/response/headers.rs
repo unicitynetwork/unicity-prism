@@ -1,25 +1,30 @@
 //! Headers response message types for the P2P protocol.
 //!
-//! This module contains the headers response message implementation, which is used
-//! to send block header data from peers in response to `getheaders` requests.
+//! This module contains the headers response message implementation, which is
+//! used to send block header data from peers in response to `getheaders`
+//! requests.
 //!
 //! # Usage
 //!
-//! The `Headers` message is used to efficiently synchronize blockchain information
-//! between peers. Instead of sending full blocks, only the headers are transmitted,
-//! allowing for faster synchronization and reduced bandwidth usage.
+//! The `Headers` message is used to efficiently synchronize blockchain
+//! information between peers. Instead of sending full blocks, only the headers
+//! are transmitted, allowing for faster synchronization and reduced bandwidth
+//! usage.
 //!
 //! # Consensus Encoding
 //!
 //! The `Headers` struct manually implements `Encodable` and `Decodable` traits,
-//! allowing it to be encoded and decoded according to Bitcoin's consensus rules.
+//! allowing it to be encoded and decoded according to Bitcoin's consensus
+//! rules.
 //!
 //! # Examples
 //!
 //! TODO: Add examples when the library is more mature.
 
-use crate::blockdata::block::Header;
-use crate::consensus::{Decodable, Encodable};
+use crate::{
+    blockdata::block::Header,
+    consensus::{Decodable, Encodable},
+};
 
 /// Represents a headers response message in the P2P protocol.
 ///
@@ -126,13 +131,14 @@ impl<H: Header> Decodable for Headers<H> {
 
 #[cfg(test)]
 mod tests {
+    use bitcoin::{
+        BlockHash, CompactTarget, TxMerkleNode,
+        block::{Header as InnerBitcoinHeader, Version},
+        consensus::{Decodable, Encodable},
+    };
+
     use super::*;
-    use crate::blockdata::block::BitcoinHeader;
-    use crate::hashes::Hash;
-    use bitcoin::block::Header as InnerBitcoinHeader;
-    use bitcoin::block::Version;
-    use bitcoin::consensus::{Decodable, Encodable};
-    use bitcoin::{BlockHash, CompactTarget, TxMerkleNode};
+    use crate::{blockdata::block::BitcoinHeader, hashes::Hash};
 
     fn create_test_header() -> BitcoinHeader {
         InnerBitcoinHeader {

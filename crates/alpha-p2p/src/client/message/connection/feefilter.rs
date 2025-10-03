@@ -1,21 +1,22 @@
 //! FeeFilter message implementation for BIP 133 (Fee Filtering).
 //!
 //! The "feefilter" message is defined as a message containing an 8-byte integer
-//! (little-endian) that represents the minimum fee rate (in satoshis per kilobyte)
-//! for which transactions should be relayed to this peer.
+//! (little-endian) that represents the minimum fee rate (in satoshis per
+//! kilobyte) for which transactions should be relayed to this peer.
 //!
-//! This message was introduced in Bitcoin Core 0.13.0 following the introduction
-//! of mempool limiting in Bitcoin Core 0.12.0. It allows a node to inform its peers
-//! that it will not accept transactions below a specified fee rate into its mempool,
-//! and therefore that the peers can skip relaying inv messages for transactions
-//! below that fee rate to that node.
+//! This message was introduced in Bitcoin Core 0.13.0 following the
+//! introduction of mempool limiting in Bitcoin Core 0.12.0. It allows a node to
+//! inform its peers that it will not accept transactions below a specified fee
+//! rate into its mempool, and therefore that the peers can skip relaying inv
+//! messages for transactions below that fee rate to that node.
 
 use alpha_p2p_derive::ConsensusCodec;
 
 /// Represents a feefilter message in the P2P protocol (BIP 133).
 ///
-/// This message is used to inform peers about the minimum fee rate for transaction
-/// relay. Transactions with fee rates below this value should not be relayed to this peer.
+/// This message is used to inform peers about the minimum fee rate for
+/// transaction relay. Transactions with fee rates below this value should not
+/// be relayed to this peer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ConsensusCodec)]
 pub struct FeeFilter {
     /// The minimum fee rate (in satoshis per kilobyte) below which
@@ -84,13 +85,15 @@ impl FeeFilter {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::blockdata::block::BitcoinHeader;
-    use crate::client::network::NetworkMessage;
-    use crate::client::{Connection, ConnectionManager, Message};
-    use crate::consensus::{Decodable, Encodable};
-    use crate::network::Network;
     use bitcoin::io::Cursor;
+
+    use super::*;
+    use crate::{
+        blockdata::block::BitcoinHeader,
+        client::{Connection, ConnectionManager, Message, network::NetworkMessage},
+        consensus::{Decodable, Encodable},
+        network::Network,
+    };
 
     #[test]
     fn test_feefilter_new() {
@@ -150,7 +153,8 @@ mod tests {
         assert_eq!(encoded.len(), 8);
 
         // Check the little-endian representation of 48508
-        // 48508 = 0xBD7C, so in little-endian it should be [0x7C, 0xBD, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        // 48508 = 0xBD7C, so in little-endian it should be [0x7C, 0xBD, 0x00, 0x00,
+        // 0x00, 0x00, 0x00, 0x00]
         let expected_bytes = [0x7C, 0xBD, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         assert_eq!(encoded.as_slice(), expected_bytes);
     }
@@ -200,7 +204,8 @@ mod tests {
 
     #[test]
     fn test_feefilter_message_serialization() {
-        // Create a FeeFilter message with the example value from the task: 48,508 sat/kB
+        // Create a FeeFilter message with the example value from the task: 48,508
+        // sat/kB
         let feefilter = FeeFilter::new(48508);
 
         // Test serialization to bytes
@@ -208,7 +213,8 @@ mod tests {
         feefilter.consensus_encode(&mut serialized).unwrap();
 
         // Verify the serialized bytes match the expected little-endian representation
-        // 48,508 = 0xBD7C, so in little-endian it should be [0x7C, 0xBD, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        // 48,508 = 0xBD7C, so in little-endian it should be [0x7C, 0xBD, 0x00, 0x00,
+        // 0x00, 0x00, 0x00, 0x00]
         let expected_bytes = [0x7C, 0xBD, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         assert_eq!(serialized.as_slice(), expected_bytes);
 

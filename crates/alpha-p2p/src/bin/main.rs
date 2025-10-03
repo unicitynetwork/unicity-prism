@@ -3,16 +3,18 @@
 //! This module implements a Bitcoin P2P node that can connect to peers,
 //! perform handshakes, and synchronize blockchain data.
 
-use alpha_p2p::blockdata::block::BitcoinHeader;
-use alpha_p2p::client::{
-    BlockSynchronizer, ConnectionConfig, ConnectionError, ConnectionManager, HandshakeHandler,
-    SyncConfig,
+use std::{net::SocketAddr, str::FromStr};
+
+use alpha_p2p::{
+    blockdata::block::BitcoinHeader,
+    client::{
+        BlockSynchronizer, ConnectionConfig, ConnectionError, ConnectionManager, HandshakeHandler,
+        SyncConfig,
+    },
+    network::Network,
+    p2p::ServiceFlags,
 };
-use alpha_p2p::network::Network;
-use alpha_p2p::p2p::ServiceFlags;
 use clap::Parser;
-use std::net::SocketAddr;
-use std::str::FromStr;
 use tracing::{debug, error, info};
 use tracing_subscriber::EnvFilter;
 
@@ -94,7 +96,12 @@ fn parse_network(network_str: &str) -> Result<Network, Box<dyn std::error::Error
         "mainnet" | "alpha" => Ok(Network::Mainnet),
         "testnet" | "alphatestnet" => Ok(Network::Testnet),
         "regtest" | "alpharegtest" => Ok(Network::Regtest),
-        _ => Err(format!("Invalid network: {}. Supported networks: mainnet/alpha, testnet/alphatestnet, regtest/alpharegtest", network_str).into()),
+        _ => Err(format!(
+            "Invalid network: {}. Supported networks: mainnet/alpha, testnet/alphatestnet, \
+             regtest/alpharegtest",
+            network_str
+        )
+        .into()),
     }
 }
 
@@ -158,7 +165,8 @@ async fn connect_and_sync(
         u32::from_le_bytes(connection_manager.magic().to_bytes())
     );
 
-    // Check if we're connecting to a mainnet peer with a testnet magic or vice versa
+    // Check if we're connecting to a mainnet peer with a testnet magic or vice
+    // versa
     if connection_manager.network() == Network::Mainnet {
         debug!(
             "Connecting to mainnet with mainnet magic: {:02x?}",

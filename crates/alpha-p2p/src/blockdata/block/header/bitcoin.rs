@@ -1,16 +1,16 @@
 //! Bitcoin-compatible block header implementation.
 //!
-//! This module provides a wrapper around Bitcoin's standard block header that implements
-//! the common [`Header`] trait, enabling compatibility with existing Bitcoin infrastructure
-//! while maintaining the interface required by the Unicity Alpha network.
+//! This module provides a wrapper around Bitcoin's standard block header that
+//! implements the common [`Header`] trait, enabling compatibility with existing
+//! Bitcoin infrastructure while maintaining the interface required by the
+//! Unicity Alpha network.
 
-use crate::blockdata::block::header::Header;
-use crate::pow::Target;
 use alpha_p2p_derive::ConsensusCodec;
-use bitcoin::BlockHash;
-use bitcoin::block::ValidationError;
 pub use bitcoin::blockdata::block::Header as InnerHeader;
+use bitcoin::{BlockHash, block::ValidationError};
 use serde::{Deserialize, Serialize};
+
+use crate::{blockdata::block::header::Header, pow::Target};
 
 /// A wrapper around Bitcoin's standard block header.
 ///
@@ -33,13 +33,16 @@ pub struct BitcoinHeader(InnerHeader);
 impl Header for BitcoinHeader {
     /// The size of a Bitcoin block header in bytes.
     ///
-    /// Bitcoin headers are always 80 bytes, following the Bitcoin protocol specification.
+    /// Bitcoin headers are always 80 bytes, following the Bitcoin protocol
+    /// specification.
     const SIZE: usize = InnerHeader::SIZE;
 
-    /// Computes the block hash using Bitcoin's standard double-SHA256 algorithm.
+    /// Computes the block hash using Bitcoin's standard double-SHA256
+    /// algorithm.
     ///
-    /// This method delegates to the underlying Bitcoin header's block_hash method,
-    /// which performs the standard Bitcoin hashing algorithm (double SHA-256) on the header.
+    /// This method delegates to the underlying Bitcoin header's block_hash
+    /// method, which performs the standard Bitcoin hashing algorithm
+    /// (double SHA-256) on the header.
     ///
     /// # Returns
     ///
@@ -50,30 +53,35 @@ impl Header for BitcoinHeader {
 
     /// Extracts the difficulty target from the header.
     ///
-    /// Bitcoin headers store the target in a compact format (32 bits). This method
-    /// converts the compact target to a full 256-bit target value that can be used
-    /// for difficulty calculations and proof-of-work validation.
+    /// Bitcoin headers store the target in a compact format (32 bits). This
+    /// method converts the compact target to a full 256-bit target value
+    /// that can be used for difficulty calculations and proof-of-work
+    /// validation.
     ///
     /// # Returns
     ///
     /// * `Some(Target)` - The converted target value
-    /// * `None` - Never returns None for Bitcoin headers as they always have a valid target
+    /// * `None` - Never returns None for Bitcoin headers as they always have a
+    ///   valid target
     fn target(&self) -> Option<Target> {
         Some(self.0.target().into())
     }
 
     /// Validates the proof of work against the required target.
     ///
-    /// This method should verify that the block hash is below the required target,
-    /// confirming that the miner has performed sufficient work to satisfy the difficulty.
+    /// This method should verify that the block hash is below the required
+    /// target, confirming that the miner has performed sufficient work to
+    /// satisfy the difficulty.
     ///
     /// # Arguments
     ///
-    /// * `required_target` - The target that the block hash must be below to be valid
+    /// * `required_target` - The target that the block hash must be below to be
+    ///   valid
     ///
     /// # Returns
     ///
-    /// * `Ok(BlockHash)` - If the proof of work is valid, returns the block hash
+    /// * `Ok(BlockHash)` - If the proof of work is valid, returns the block
+    ///   hash
     /// * `Err(ValidationError)` - If the proof of work is invalid
     fn validate_pow(&self, required_target: Target) -> Result<BlockHash, ValidationError> {
         self.0.validate_pow(required_target.into())
@@ -83,8 +91,8 @@ impl Header for BitcoinHeader {
 impl From<InnerHeader> for BitcoinHeader {
     /// Creates a new BitcoinHeader from a standard Bitcoin header.
     ///
-    /// This conversion is straightforward as BitcoinHeader is just a thin wrapper
-    /// around the standard Bitcoin header.
+    /// This conversion is straightforward as BitcoinHeader is just a thin
+    /// wrapper around the standard Bitcoin header.
     ///
     /// # Arguments
     ///

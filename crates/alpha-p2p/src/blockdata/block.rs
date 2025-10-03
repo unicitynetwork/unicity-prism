@@ -1,11 +1,14 @@
 mod header;
 
-use crate::blockdata::transaction::Transaction;
-use crate::consensus::{Decodable, Encodable, EncodeDecodeError};
-use crate::hashes::{Sha256Hash, hash_newtype};
-use crate::io::{Error as IoError, Read, Write};
 pub use bitcoin::block::{BlockHash, ValidationError, WitnessMerkleNode};
 pub use header::{BitcoinHeader, Header, RandomXHeader};
+
+use crate::{
+    blockdata::transaction::Transaction,
+    consensus::{Decodable, Encodable, EncodeDecodeError},
+    hashes::{Sha256Hash, hash_newtype},
+    io::{Error as IoError, Read, Write},
+};
 
 /// Type alias for a Bitcoin block.
 pub type BitcoinBlock = Block<BitcoinHeader>;
@@ -40,7 +43,8 @@ impl Decodable for RandomXHash {
 /// Represents a block in the blockchain.
 ///
 /// A `Block` contains:
-/// - The header of the block, which includes metadata like timestamp and previous block hash
+/// - The header of the block, which includes metadata like timestamp and
+///   previous block hash
 /// - A list of transactions contained within the block
 /// - An optional witness root, used for transaction witness data verification
 #[derive(Clone, Debug, PartialEq, Eq)]

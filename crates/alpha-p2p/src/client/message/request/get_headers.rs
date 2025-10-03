@@ -1,25 +1,29 @@
-use crate::blockdata::block::BlockHash;
-use crate::hashes::Hash;
 use alpha_p2p_derive::ConsensusCodec;
 
-/// Requests an `headers` message that provides block header hashes starting from a particular
-/// point in the blockchain. It allows a peer which has been disconnected or started for the
-/// first time to get the data it needs to request the headers it hasn't seen.
+use crate::{blockdata::block::BlockHash, hashes::Hash};
+
+/// Requests an `headers` message that provides block header hashes starting
+/// from a particular point in the blockchain. It allows a peer which has been
+/// disconnected or started for the first time to get the data it needs to
+/// request the headers it hasn't seen.
 ///
-/// This message is used to synchronize block header information between peers in the Bitcoin
-/// network. The requesting peer sends a list of known block hashes (locators) and a stop hash,
-/// and the responding peer returns headers for blocks starting from the first locator that is
-/// found in the local chain. Up to a maximum of 2000 headers or until the stop hash is reached.
+/// This message is used to synchronize block header information between peers
+/// in the Bitcoin network. The requesting peer sends a list of known block
+/// hashes (locators) and a stop hash, and the responding peer returns headers
+/// for blocks starting from the first locator that is found in the local chain.
+/// Up to a maximum of 2000 headers or until the stop hash is reached.
 ///
 /// ## API Contract
 ///
-/// The `GetHeaders` message must be encoded and decoded using the [ConsensusCodec] trait,
-/// ensuring compatibility with the Bitcoin protocol. The encoded format includes:
+/// The `GetHeaders` message must be encoded and decoded using the
+/// [ConsensusCodec] trait, ensuring compatibility with the Bitcoin protocol.
+/// The encoded format includes:
 ///
 /// 1. `version` (4 bytes): Protocol version number.
 /// 2. `hashes_count` (1-9 bytes, varint): Number of locator hashes.
 /// 3. `hashes` (32 bytes each): Block header hashes in reverse height order.
-/// 4. `stop_hash` (32 bytes): Last block header hash to request, or all zeros for max headers.
+/// 4. `stop_hash` (32 bytes): Last block header hash to request, or all zeros
+///    for max headers.
 ///
 /// ## Usage Example
 ///
@@ -49,35 +53,41 @@ pub struct GetHeaders {
     /// The protocol version number, same as in the version message.
     ///
     /// This ensures compatibility with the responding peer's protocol version,
-    /// and must typically be set to the same value as used in the `version` message.
+    /// and must typically be set to the same value as used in the `version`
+    /// message.
     version: u32,
 
-    /// One or more block header hashes (32 bytes each) in internal byte order. Must be provided
-    /// in reverse order of block height. Highest height hashes first.
+    /// One or more block header hashes (32 bytes each) in internal byte order.
+    /// Must be provided in reverse order of block height. Highest height
+    /// hashes first.
     ///
-    /// These are the locator hashes used to find the starting point in the chain
-    /// where headers should be sent from. The first hash that matches an actual block header in the
-    /// local chain determines the beginning of the returned headers.
+    /// These are the locator hashes used to find the starting point in the
+    /// chain where headers should be sent from. The first hash that matches
+    /// an actual block header in the local chain determines the beginning
+    /// of the returned headers.
     ///
     /// # Note on Ordering
-    /// The hashes must be ordered from highest to lowest block height (reverse chronological order),
-    /// as this allows the receiving peer to quickly locate its best known block and start providing
-    /// headers from there.
+    /// The hashes must be ordered from highest to lowest block height (reverse
+    /// chronological order), as this allows the receiving peer to quickly
+    /// locate its best known block and start providing headers from there.
     ///
     /// # Limitations
-    /// - A maximum of 10,000 locator hashes may be included in the message as per BIP-144,
-    ///   although only up to 2000 headers are returned, as per BIP-97.
+    /// - A maximum of 10,000 locator hashes may be included in the message as
+    ///   per BIP-144, although only up to 2000 headers are returned, as per
+    ///   BIP-97.
     hashes: Vec<BlockHash>,
 
-    /// The last block header hash being requested. If none, hash is set to all zeroes which
-    /// will send a maximum of 2,000 headers.
+    /// The last block header hash being requested. If none, hash is set to all
+    /// zeroes which will send a maximum of 2,000 headers.
     ///
-    /// This is used to limit the response size. When set to all zeros, it indicates
-    /// that headers should be sent up to the maximum allowed (2000 headers).
+    /// This is used to limit the response size. When set to all zeros, it
+    /// indicates that headers should be sent up to the maximum allowed
+    /// (2000 headers).
     ///
     /// # Usage
-    /// If you are requesting headers from the most recent known block, set this to all zeros.
-    /// Otherwise, specify a particular stop hash (e.g., the hash of an expected final block).
+    /// If you are requesting headers from the most recent known block, set this
+    /// to all zeros. Otherwise, specify a particular stop hash (e.g., the
+    /// hash of an expected final block).
     ///
     /// # Format
     /// The format is a full 32-byte [BlockHash] in internal byte order.
@@ -85,21 +95,25 @@ pub struct GetHeaders {
 }
 
 impl GetHeaders {
-    /// The maximum number of headers that can be requested in a single `getheaders` message.
+    /// The maximum number of headers that can be requested in a single
+    /// `getheaders` message.
     ///
-    /// This limit is imposed to prevent excessive resource usage and ensure efficient
-    /// synchronization between peers, as per [BIP-97](https://github.com/bitcoin/bips/blob/master/bip-0097.mediawiki).
+    /// This limit is imposed to prevent excessive resource usage and ensure
+    /// efficient synchronization between peers, as per [BIP-97](https://github.com/bitcoin/bips/blob/master/bip-0097.mediawiki).
     pub const MAX_HEADERS: usize = 2000;
 
-    /// Creates a new `GetHeaders` message with the specified version, locator hashes,
-    /// and an optional stop hash.
+    /// Creates a new `GetHeaders` message with the specified version, locator
+    /// hashes, and an optional stop hash.
     ///
     /// # Arguments
-    /// * `version` - The protocol version number, same as in the version message.
-    /// * `hashes` - One or more block header hashes (32 bytes each) in internal byte order.
-    ///   Must be provided in reverse order of block height. Highest height hashes first.
-    /// * `stop_hash` - An optional [BlockHash] to specify the last block header hash being requested.
-    ///   If `None`, the default value (all zeros) is used, which will send a maximum of 2000 headers.
+    /// * `version` - The protocol version number, same as in the version
+    ///   message.
+    /// * `hashes` - One or more block header hashes (32 bytes each) in internal
+    ///   byte order. Must be provided in reverse order of block height. Highest
+    ///   height hashes first.
+    /// * `stop_hash` - An optional [BlockHash] to specify the last block header
+    ///   hash being requested. If `None`, the default value (all zeros) is
+    ///   used, which will send a maximum of 2000 headers.
     ///
     /// # Returns
     /// A new instance of `GetHeaders` message.
@@ -157,9 +171,9 @@ impl GetHeaders {
 
     /// Gets the locator hashes of this message.
     ///
-    /// These are the block header hashes used to find the starting point in the chain
-    /// where headers should be sent from. The hashes are provided in reverse order of
-    /// block height, with the highest height hashes first.
+    /// These are the block header hashes used to find the starting point in the
+    /// chain where headers should be sent from. The hashes are provided in
+    /// reverse order of block height, with the highest height hashes first.
     ///
     /// # Returns
     /// * `&[BlockHash]` - A slice of block header hashes.
@@ -191,8 +205,9 @@ impl GetHeaders {
 
     /// Gets the stop hash of this message.
     ///
-    /// The stop hash indicates the last block header hash being requested. If set to all
-    /// zeroes, it signals that headers should be sent up to the maximum allowed (2000 headers).
+    /// The stop hash indicates the last block header hash being requested. If
+    /// set to all zeroes, it signals that headers should be sent up to the
+    /// maximum allowed (2000 headers).
     ///
     /// # Returns
     /// * `&BlockHash` - A reference to the stop hash.
@@ -314,8 +329,10 @@ impl GetHeaders {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::consensus::{Decodable, Encodable};
-    use crate::util::hex_to_blockhash;
+    use crate::{
+        consensus::{Decodable, Encodable},
+        util::hex_to_blockhash,
+    };
 
     #[test]
     pub fn test_getheaders_encode() -> Result<(), Box<dyn std::error::Error>> {

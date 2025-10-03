@@ -1,14 +1,15 @@
 //! Bitcoin P2P Network Message Types
 //!
-//! This module defines the complete set of message types used in Bitcoin's P2P network protocol.
-//! Messages are categorized into three main groups:
+//! This module defines the complete set of message types used in Bitcoin's P2P
+//! network protocol. Messages are categorized into three main groups:
 //!
 //! 1. **Connection messages** - Handshake and keep-alive communication
 //! 2. **Request messages** - Outgoing requests from this client to peers
 //! 3. **Response messages** - Incoming responses to requests from peers
 //!
-//! The enum structure provides type safety and clear categorization of all P2P network messages,
-//! making it easy to handle different message types appropriately in the Bitcoin client.
+//! The enum structure provides type safety and clear categorization of all P2P
+//! network messages, making it easy to handle different message types
+//! appropriately in the Bitcoin client.
 
 // See: https://developer.bitcoin.org/reference/p2p_networking.html#data-messages
 // Only requests are implemented as this client is not meant to relay.
@@ -19,18 +20,22 @@ pub mod inventory;
 pub(crate) mod request;
 pub(crate) mod response;
 
-use crate::blockdata::block::{Block, Header};
-use crate::client::message::connection::FeeFilter;
-use crate::client::message::get_data::GetData;
-pub(crate) use crate::client::message::response::{Headers, NotFound, Tx};
-use crate::client::network::NetworkError;
-use crate::consensus::Decodable;
-use crate::io::{Error, Write};
-use bitcoin::consensus::Encodable;
-use bitcoin::p2p::message::CommandString;
+use std::io;
+
+use bitcoin::{consensus::Encodable, p2p::message::CommandString};
 pub use connection::{Ping, Pong, SendCmpct, Version};
 pub use request::GetHeaders;
-use std::io;
+
+pub(crate) use crate::client::message::response::{Headers, NotFound, Tx};
+use crate::{
+    blockdata::block::{Block, Header},
+    client::{
+        message::{connection::FeeFilter, get_data::GetData},
+        network::NetworkError,
+    },
+    consensus::Decodable,
+    io::{Error, Write},
+};
 
 /// Enum for message commands to avoid string matching
 #[derive(Debug, Clone, PartialEq)]
@@ -266,15 +271,18 @@ impl MessageCommand {
 
 /// Top-level Bitcoin P2P network message enum.
 ///
-/// This enum represents all possible types of messages that can be sent or received
-/// in the Bitcoin P2P network. Each variant contains a specific type of message,
-/// allowing for proper handling and dispatching of messages throughout the network.
+/// This enum represents all possible types of messages that can be sent or
+/// received in the Bitcoin P2P network. Each variant contains a specific type
+/// of message, allowing for proper handling and dispatching of messages
+/// throughout the network.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message<H: Header> {
-    /// Protocol-level messages used for establishing and maintaining connections.
+    /// Protocol-level messages used for establishing and maintaining
+    /// connections.
     ///
-    /// These include handshake messages, acknowledgments, and keep-alive communications
-    /// that are essential for peer discovery and connection management.
+    /// These include handshake messages, acknowledgments, and keep-alive
+    /// communications that are essential for peer discovery and connection
+    /// management.
     Connection(Connection),
 
     /// Peer-to-peer request messages sent from this client to other peers.
@@ -286,7 +294,8 @@ pub enum Message<H: Header> {
     /// Responses to peer-to-peer request messages received from other peers.
     ///
     /// These are incoming responses that contain the requested data or error
-    /// information from other nodes in response to requests made by this client.
+    /// information from other nodes in response to requests made by this
+    /// client.
     Response(Response<H>),
 }
 
@@ -329,8 +338,9 @@ impl<H: Header> Encodable for Message<H> {
 }
 
 ///
-/// These messages are part of the Bitcoin P2P protocol handshake and connection management,
-/// including version negotiation, acknowledgments, and keep-alive communication.
+/// These messages are part of the Bitcoin P2P protocol handshake and connection
+/// management, including version negotiation, acknowledgments, and keep-alive
+/// communication.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Connection {
     /// Initial handshake message - sent to introduce this node to a peer.
@@ -345,16 +355,18 @@ pub enum Connection {
     /// Acknowledgment of handshake completion.
     ///
     /// This message is sent after receiving a version message to confirm
-    /// that the handshake has been successfully completed and both peers are ready.
+    /// that the handshake has been successfully completed and both peers are
+    /// ready.
     VerAck,
 
     /// Keep-alive message - sent periodically to maintain connection.
     ///
-    /// Ping messages are used to test if the peer is still alive and responsive,
-    /// and to prevent connection timeouts in idle networks.
+    /// Ping messages are used to test if the peer is still alive and
+    /// responsive, and to prevent connection timeouts in idle networks.
     Ping(Ping),
 
-    /// Response to a ping message - sent when receiving a ping from another peer.
+    /// Response to a ping message - sent when receiving a ping from another
+    /// peer.
     ///
     /// This is the standard response to keep-alive messages, confirming that
     /// this node is still active and responsive.
@@ -362,29 +374,31 @@ pub enum Connection {
 
     /// Signal preference for wtxid-based transaction relay (BIP 339).
     ///
-    /// This message signals that the node prefers to use transaction identifiers
-    /// (wtxids) instead of transaction hashes for transaction relay.
-    /// The message has no payload.
+    /// This message signals that the node prefers to use transaction
+    /// identifiers (wtxids) instead of transaction hashes for transaction
+    /// relay. The message has no payload.
     WtxIdRelay,
 
     /// Signal preference for addrv2 format (BIP 155).
     ///
-    /// This message signals that the node wants to receive address messages in the
-    /// addrv2 format, which supports more address types than the original addr format.
-    /// The message has no payload.
+    /// This message signals that the node wants to receive address messages in
+    /// the addrv2 format, which supports more address types than the
+    /// original addr format. The message has no payload.
     SendAddrV2,
 
     /// Signal preference for compact block announcements (BIP 152).
     ///
-    /// This message is used to signal to a peer whether they should announce new blocks
-    /// using compact blocks (cmpctblock messages) or traditional inv/headers messages.
+    /// This message is used to signal to a peer whether they should announce
+    /// new blocks using compact blocks (cmpctblock messages) or traditional
+    /// inv/headers messages.
     SendCmpct(SendCmpct),
 
     /// Set minimum fee rate for transaction relay (BIP 133).
     ///
-    /// This message informs peers about the minimum fee rate (in satoshis per kilobyte)
-    /// for which transactions should be relayed to this peer. Transactions with fee rates
-    /// below this value should not be relayed to this peer.
+    /// This message informs peers about the minimum fee rate (in satoshis per
+    /// kilobyte) for which transactions should be relayed to this peer.
+    /// Transactions with fee rates below this value should not be relayed
+    /// to this peer.
     FeeFilter(FeeFilter),
 }
 
@@ -412,9 +426,9 @@ impl Encodable for Connection {
 pub enum Request {
     /// Request for blocks or transactions.
     ///
-    /// The GetHeaders message is used to request headers of blocks starting from
-    /// a set of known block hashes, allowing the client to synchronize its view
-    /// of the blockchain with other peers.
+    /// The GetHeaders message is used to request headers of blocks starting
+    /// from a set of known block hashes, allowing the client to synchronize
+    /// its view of the blockchain with other peers.
     GetHeaders(GetHeaders),
 
     /// Request for specific data items.
@@ -441,8 +455,9 @@ impl Encodable for Request {
 pub enum Response<H: Header> {
     /// Advertise new blocks or transactions.
     ///
-    /// This response contains headers of blocks that are available for synchronization,
-    /// allowing the requesting node to update its view of the blockchain.
+    /// This response contains headers of blocks that are available for
+    /// synchronization, allowing the requesting node to update its view of
+    /// the blockchain.
     Headers(Headers<H>),
 
     /// Full block data.
@@ -459,9 +474,10 @@ pub enum Response<H: Header> {
 
     /// Requested data not found.
     ///
-    /// This response indicates that the requested data (block, transaction, etc.)
-    /// was not found on this peer. This may occur when the requested data is
-    /// unknown to the node or has already been pruned from the local storage.
+    /// This response indicates that the requested data (block, transaction,
+    /// etc.) was not found on this peer. This may occur when the requested
+    /// data is unknown to the node or has already been pruned from the
+    /// local storage.
     NotFound(NotFound),
 }
 

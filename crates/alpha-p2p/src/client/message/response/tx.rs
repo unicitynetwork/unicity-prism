@@ -1,30 +1,35 @@
 //! Transaction response message types for the P2P protocol.
 //!
-//! This module contains the transaction response message implementation, which is used
-//! to send complete transaction data from peers in response to `getdata` requests.
+//! This module contains the transaction response message implementation, which
+//! is used to send complete transaction data from peers in response to
+//! `getdata` requests.
 //!
 //! # Usage
 //!
-//! The `Tx` message is used to send full transaction data when a peer requests it.
-//! This allows for complete transaction information to be transmitted over the P2P network
-//! when needed.
+//! The `Tx` message is used to send full transaction data when a peer requests
+//! it. This allows for complete transaction information to be transmitted over
+//! the P2P network when needed.
 //!
 //! # Consensus Encoding
 //!
 //! The `Tx` struct manually implements `Encodable` and `Decodable` traits,
-//! allowing it to be encoded and decoded according to Bitcoin's consensus rules.
-//! The encoding simply delegates to the underlying `Transaction` encoding.
+//! allowing it to be encoded and decoded according to Bitcoin's consensus
+//! rules. The encoding simply delegates to the underlying `Transaction`
+//! encoding.
 //!
 //! # Examples
 //!
 //! TODO: Add examples when the library is more mature.
 
-use crate::blockdata::transaction::Transaction;
-use crate::consensus::{Decodable, Encodable};
+use crate::{
+    blockdata::transaction::Transaction,
+    consensus::{Decodable, Encodable},
+};
 
 /// Represents a transaction response message in the P2P protocol.
 ///
-/// A `Tx` response contains a complete transaction that was requested by a peer.
+/// A `Tx` response contains a complete transaction that was requested by a
+/// peer.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Tx {
     /// The complete transaction data.
@@ -75,14 +80,16 @@ impl Decodable for Tx {
 
 #[cfg(test)]
 mod tests {
+    use bitcoin::consensus::{Decodable, Encodable};
+
     use super::*;
     use crate::blockdata::transaction::Transaction;
-    use bitcoin::consensus::{Decodable, Encodable};
 
     /// Create a minimal test transaction for use in tests
     fn create_test_transaction() -> Transaction {
+        use bitcoin::{Amount, ScriptBuf, Sequence, TxIn, TxOut, locktime::absolute};
+
         use crate::blockdata::transaction::Version;
-        use bitcoin::{locktime::absolute, Amount, ScriptBuf, Sequence, TxIn, TxOut};
 
         let txin = TxIn {
             previous_output: bitcoin::OutPoint::null(),

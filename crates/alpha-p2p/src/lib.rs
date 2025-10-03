@@ -1,8 +1,8 @@
 //! Alpha P2P library for Alpha protocol implementation.
 //!
-//! This library provides a comprehensive implementation of the Alpha P2P protocol,
-//! including message types, connection management, handshake protocol, and block
-//! synchronization functionality.
+//! This library provides a comprehensive implementation of the Alpha P2P
+//! protocol, including message types, connection management, handshake
+//! protocol, and block synchronization functionality.
 
 #![cfg_attr(test, allow(clippy::arithmetic_side_effects))]
 #![cfg_attr(test, allow(clippy::unwrap_used))]

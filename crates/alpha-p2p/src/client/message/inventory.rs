@@ -1,16 +1,18 @@
 //! Module for handling inventory vectors in Bitcoin P2P consensus messages.
 //!
-//! This module defines the `Inventory` enum, which represents different types of inventory
-//! items that can be advertised or requested between peers. It is used in network messages
-//! such as `inv` and `getdata`.
+//! This module defines the `Inventory` enum, which represents different types
+//! of inventory items that can be advertised or requested between peers. It is
+//! used in network messages such as `inv` and `getdata`.
 //!
 //! ## Inventory Types
 //!
-//! Each variant includes a 4-byte `inv_type` field and a 32-byte hash. The supported types are:
+//! Each variant includes a 4-byte `inv_type` field and a 32-byte hash. The
+//! supported types are:
 //!
 //! - `Transaction`: A plain transaction (Txid).
 //! - `Block`: A full block header.
-//! - `FilteredBlock`: A block header requested as a `merkleblock` (requires bloom filter).
+//! - `FilteredBlock`: A block header requested as a `merkleblock` (requires
+//!   bloom filter).
 //! - `CompactBlock`: A block header requested as a `cmpctblock`.
 //! - `WitnessTransaction`: A transaction that includes witness data.
 //! - `WitnessBlock`: A block that includes witness data in its transactions.
@@ -34,12 +36,13 @@
 //!
 //! # Errors
 //!
-//! The `consensus_decode` implementation propagates parsing errors, such as malformed data.
-use crate::blockdata::block::BlockHash;
-use crate::blockdata::transaction::Txid;
-use crate::consensus::encode::VarInt;
-use crate::consensus::{Decodable, Encodable};
-use crate::hashes::Hash;
+//! The `consensus_decode` implementation propagates parsing errors, such as
+//! malformed data.
+use crate::{
+    blockdata::{block::BlockHash, transaction::Txid},
+    consensus::{Decodable, Encodable, encode::VarInt},
+    hashes::Hash,
+};
 
 /// A list of inventory items for consensus encoding
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -47,7 +50,8 @@ pub(crate) struct InventoryList(pub Vec<Inventory>);
 
 #[allow(dead_code)]
 impl InventoryList {
-    /// Constructs a new `InventoryList` from the given vector of `Inventory` items.
+    /// Constructs a new `InventoryList` from the given vector of `Inventory`
+    /// items.
     pub fn new(inventories: Vec<Inventory>) -> Self {
         Self(inventories)
     }
@@ -67,22 +71,26 @@ impl InventoryList {
         self.0.clear();
     }
 
-    /// Returns a reference to the first inventory item, or `None` if the list is empty.
+    /// Returns a reference to the first inventory item, or `None` if the list
+    /// is empty.
     pub fn first(&self) -> Option<&Inventory> {
         self.0.first()
     }
 
-    /// Returns a reference to the last inventory item, or `None` if the list is empty.
+    /// Returns a reference to the last inventory item, or `None` if the list is
+    /// empty.
     pub fn last(&self) -> Option<&Inventory> {
         self.0.last()
     }
 
-    /// Returns a mutable reference to the first inventory item, or `None` if the list is empty.
+    /// Returns a mutable reference to the first inventory item, or `None` if
+    /// the list is empty.
     pub fn first_mut(&mut self) -> Option<&mut Inventory> {
         self.0.first_mut()
     }
 
-    /// Returns a mutable reference to the last inventory item, or `None` if the list is empty.
+    /// Returns a mutable reference to the last inventory item, or `None` if the
+    /// list is empty.
     pub fn last_mut(&mut self) -> Option<&mut Inventory> {
         self.0.last_mut()
     }
@@ -92,17 +100,20 @@ impl InventoryList {
         self.0.push(inventory);
     }
 
-    /// Removes and returns the last `Inventory` item, or `None` if the list is empty.
+    /// Removes and returns the last `Inventory` item, or `None` if the list is
+    /// empty.
     pub fn pop(&mut self) -> Option<Inventory> {
         self.0.pop()
     }
 
-    /// Inserts an `Inventory` item at the specified index, shifting all subsequent elements to the right.
+    /// Inserts an `Inventory` item at the specified index, shifting all
+    /// subsequent elements to the right.
     pub fn insert(&mut self, index: usize, inventory: Inventory) {
         self.0.insert(index, inventory);
     }
 
-    /// Removes and returns the `Inventory` item at the specified index, shifting all subsequent elements to the left.
+    /// Removes and returns the `Inventory` item at the specified index,
+    /// shifting all subsequent elements to the left.
     pub fn remove(&mut self, index: usize) -> Inventory {
         self.0.remove(index)
     }
@@ -117,7 +128,8 @@ impl InventoryList {
         self.0.iter_mut()
     }
 
-    /// Consumes the `InventoryList`, returning the underlying vector of `Inventory` items.
+    /// Consumes the `InventoryList`, returning the underlying vector of
+    /// `Inventory` items.
     pub fn into_vec(self) -> Vec<Inventory> {
         self.0
     }
@@ -135,8 +147,8 @@ impl From<Vec<Inventory>> for InventoryList {
 }
 
 impl IntoIterator for InventoryList {
-    type Item = Inventory;
     type IntoIter = std::vec::IntoIter<Inventory>;
+    type Item = Inventory;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -144,8 +156,8 @@ impl IntoIterator for InventoryList {
 }
 
 impl<'a> IntoIterator for &'a InventoryList {
-    type Item = &'a Inventory;
     type IntoIter = std::slice::Iter<'a, Inventory>;
+    type Item = &'a Inventory;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
@@ -205,8 +217,8 @@ impl Decodable for InventoryList {
 
 /// Inventory vector types used in Bitcoin P2P protocol.
 ///
-/// Inventory vectors are used to advertise and request data (blocks, transactions, etc.)
-/// between peers in the Bitcoin network.
+/// Inventory vectors are used to advertise and request data (blocks,
+/// transactions, etc.) between peers in the Bitcoin network.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Inventory {
     /// The hash is a `Txid`.
@@ -214,32 +226,34 @@ pub enum Inventory {
     /// The hash is a block header.
     Block(BlockHash),
     /// The hash is a block header, like Block.
-    /// When used in a `getdata` message, the corresponding address is a `merkleblock` message,
-    /// not a `block` message (but only works if a bloom filter had been configured).
+    /// When used in a `getdata` message, the corresponding address is a
+    /// `merkleblock` message, not a `block` message (but only works if a
+    /// bloom filter had been configured).
     ///
     /// Only used in `getdata` messages.
     FilteredBlock(BlockHash),
     /// The hash is a block header, like Block.
-    /// When used in a `getdata` message, the corresponding address is a `cmpactblock` message,
-    /// not a `block` message.
+    /// When used in a `getdata` message, the corresponding address is a
+    /// `cmpactblock` message, not a `block` message.
     ///
     /// Only used in `getdata` messages.
     CompactBlock(BlockHash),
-    /// The hash is a `Txid`. When used in a `getdata` message, the corresponding response is a
-    /// transaction message if the witness structure is not stripped. The witness serialization
-    /// will be used.
+    /// The hash is a `Txid`. When used in a `getdata` message, the
+    /// corresponding response is a transaction message if the witness
+    /// structure is not stripped. The witness serialization will be used.
     ///
     /// Only used in `getdata` messages.
     WitnessTransaction(Txid),
-    /// The hash is a block header. When used in a `getdata` message, the corresponding response
-    /// is a block message with transactions that have a witness using witness serialization.
+    /// The hash is a block header. When used in a `getdata` message, the
+    /// corresponding response is a block message with transactions that
+    /// have a witness using witness serialization.
     ///
     /// Only used in `getdata` messages.
     WitnessBlock(BlockHash),
     /// Reserved for future use, not currently implemented into any protocol.
     FilteredWitnessBlock(BlockHash),
-    /// If an inventory received is unknown, it is stored as this variant for later reporting or
-    /// other purposes.
+    /// If an inventory received is unknown, it is stored as this variant for
+    /// later reporting or other purposes.
     ///
     /// # Fields
     ///
@@ -329,9 +343,7 @@ mod tests {
     #[test]
     fn test_inventory_encode() -> Result<(), Box<dyn std::error::Error>> {
         let expected = hex::decode(
-            "01000000\
-            de55ffd709ac1f5dc509a0925d0b1fc4\
-            42ca034f224732e429081da1b621f55a",
+            "01000000de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a",
         )?;
 
         let txid: Txid =
@@ -349,9 +361,7 @@ mod tests {
     #[test]
     fn test_inventory_decode() -> Result<(), Box<dyn std::error::Error>> {
         let expected_data = hex::decode(
-            "01000000\
-            de55ffd709ac1f5dc509a0925d0b1fc4\
-            42ca034f224732e429081da1b621f55a",
+            "01000000de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a",
         )?;
 
         let mut cursor = std::io::Cursor::new(&expected_data);
@@ -377,10 +387,7 @@ mod tests {
 
         // Expected: VarInt(1) + single inventory item
         let expected = hex::decode(
-            "01\
-            01000000\
-            de55ffd709ac1f5dc509a0925d0b1fc4\
-            42ca034f224732e429081da1b621f55a",
+            "0101000000de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a",
         )?;
 
         assert_eq!(expected, encoded);
@@ -391,10 +398,7 @@ mod tests {
     #[test]
     fn test_inventory_list_decode_single() -> Result<(), Box<dyn std::error::Error>> {
         let expected_data = hex::decode(
-            "01\
-            01000000\
-            de55ffd709ac1f5dc509a0925d0b1fc4\
-            42ca034f224732e429081da1b621f55a",
+            "0101000000de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a",
         )?;
 
         let mut cursor = std::io::Cursor::new(&expected_data);

@@ -2,20 +2,21 @@
 //!
 //! The "sendcmpct" message is defined as a message containing a 1-byte integer
 //! followed by a 8-byte integer. The first integer is interpreted as a boolean
-//! and should have a value of either 1 or 0. The second integer is be interpreted
-//! as a little-endian version number.
+//! and should have a value of either 1 or 0. The second integer is be
+//! interpreted as a little-endian version number.
 
 use alpha_p2p_derive::ConsensusCodec;
 
 /// Represents a sendcmpct message in the P2P protocol (BIP 152).
 ///
-/// This message is used to signal to a peer whether they should announce new blocks
-/// using compact blocks (cmpctblock messages) or traditional inv/headers messages.
+/// This message is used to signal to a peer whether they should announce new
+/// blocks using compact blocks (cmpctblock messages) or traditional inv/headers
+/// messages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ConsensusCodec)]
 pub struct SendCmpct {
-    /// A boolean indicating whether to announce new blocks using cmpctblock messages.
-    /// true (1) = announce new blocks by sending cmpctblock messages
-    /// false (0) = announce new blocks by sending invs or headers
+    /// A boolean indicating whether to announce new blocks using cmpctblock
+    /// messages. true (1) = announce new blocks by sending cmpctblock
+    /// messages false (0) = announce new blocks by sending invs or headers
     pub announce: bool,
 
     /// A little-endian version number for compact blocks.
@@ -164,7 +165,8 @@ mod tests {
         let mut encoded = Vec::new();
         sendcmpct.consensus_encode(&mut encoded).unwrap();
 
-        // Should be 9 bytes: 1 byte for announce (boolean as u8), 8 bytes for version (u64)
+        // Should be 9 bytes: 1 byte for announce (boolean as u8), 8 bytes for version
+        // (u64)
         assert_eq!(encoded.len(), 9);
 
         // First byte should be 1 (true)

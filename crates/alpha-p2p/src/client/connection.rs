@@ -1,22 +1,29 @@
 //! TCP connection management for Alpha P2P protocol.
 //!
-//! This module provides functionality for establishing and maintaining TCP connections
-//! to Alpha peers, with support for timeouts, message sending, and receiving.
+//! This module provides functionality for establishing and maintaining TCP
+//! connections to Alpha peers, with support for timeouts, message sending, and
+//! receiving.
 
-use crate::client::message::MessageCommand;
-use crate::client::network::{NetworkError, NetworkMessage, NetworkMessageHeader};
-use crate::client::Message;
-use crate::consensus::Decodable;
-use crate::hashes::ChecksumHash;
-use crate::network::Network;
-use crate::p2p::Magic;
-use std::io;
-use std::net::SocketAddr;
-use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
-use tokio::time::timeout;
+use std::{io, net::SocketAddr, time::Duration};
+
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+    time::timeout,
+};
 use tracing::{debug, error, info};
+
+use crate::{
+    client::{
+        Message,
+        message::MessageCommand,
+        network::{NetworkError, NetworkMessage, NetworkMessageHeader},
+    },
+    consensus::Decodable,
+    hashes::ChecksumHash,
+    network::Network,
+    p2p::Magic,
+};
 
 /// Errors that can occur during connection management.
 #[derive(Debug, thiserror::Error)]
@@ -303,7 +310,8 @@ impl ConnectionManager {
 
             bytes_read = bytes_read.saturating_add(n);
 
-            // If we've read some bytes but not all, add a small delay to allow more data to arrive
+            // If we've read some bytes but not all, add a small delay to allow more data to
+            // arrive
             if bytes_read < len && bytes_read > 0 {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
@@ -444,12 +452,14 @@ impl ConnectionManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::blockdata::block::BitcoinHeader;
-    use crate::client::message::connection::Version;
-    use crate::client::message::{Connection, Message};
-    use crate::p2p::address::AddrV2;
     use std::net::Ipv4Addr;
+
+    use super::*;
+    use crate::{
+        blockdata::block::BitcoinHeader,
+        client::message::{Connection, Message, connection::Version},
+        p2p::address::AddrV2,
+    };
 
     #[tokio::test]
     async fn test_connection_manager_creation() {

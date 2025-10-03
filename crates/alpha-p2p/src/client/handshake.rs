@@ -4,15 +4,19 @@
 //! protocol, which involves exchanging Version and VerAck messages to establish
 //! a connection with a peer.
 
-use crate::blockdata::block::Header;
-use crate::client::connection::{ConnectionError, ConnectionManager};
-use crate::client::message::connection::Version;
-use crate::client::message::{Connection, Message};
-use crate::p2p::ServiceFlags;
-use crate::p2p::address::AddrV2;
 use std::net::{IpAddr, SocketAddr};
+
 use tokio::net::TcpStream;
 use tracing::{debug, info, warn};
+
+use crate::{
+    blockdata::block::Header,
+    client::{
+        connection::{ConnectionError, ConnectionManager},
+        message::{Connection, Message, connection::Version},
+    },
+    p2p::{ServiceFlags, address::AddrV2},
+};
 
 /// Information about a peer after successful handshake.
 #[derive(Debug, Clone)]
@@ -99,7 +103,8 @@ impl HandshakeHandler {
         // Send our version message
         let version_msg = self.create_version_message(peer_addr)?;
         debug!(
-            "Created version message: version={}, services={}, user_agent={}, start_height={}, nonce={}",
+            "Created version message: version={}, services={}, user_agent={}, start_height={}, \
+             nonce={}",
             version_msg.version(),
             version_msg.services(),
             version_msg.user_agent(),
@@ -130,7 +135,8 @@ impl HandshakeHandler {
                 ) => {
                     info!("Received version message from peer: {}", peer_addr);
                     debug!(
-                        "Peer version details: version={}, services={}, user_agent={}, start_height={}, relay={}",
+                        "Peer version details: version={}, services={}, user_agent={}, \
+                         start_height={}, relay={}",
                         peer_version.version(),
                         peer_version.services(),
                         peer_version.user_agent(),
@@ -228,8 +234,9 @@ impl HandshakeHandler {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    use super::*;
 
     #[test]
     fn test_handshake_handler_creation() {

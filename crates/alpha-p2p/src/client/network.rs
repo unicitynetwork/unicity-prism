@@ -1,17 +1,20 @@
 //! Network message handling for Bitcoin P2P protocol.
 //!
-//! This module provides functionality for wrapping and unwrapping Bitcoin P2P messages
-//! in the network protocol format, including magic bytes, command strings, and checksums.
+//! This module provides functionality for wrapping and unwrapping Bitcoin P2P
+//! messages in the network protocol format, including magic bytes, command
+//! strings, and checksums.
 
-use crate::blockdata::block::Header;
-use crate::client::message::{Message, MessageCommand};
-use crate::consensus::{Decodable, Encodable};
-use crate::hashes::Sha256Hash;
-use crate::io::{Error as IoError, Read, Write};
-use crate::p2p::Magic;
-use bitcoin::hashes::Hash;
-use bitcoin::p2p::message::CommandString;
+use bitcoin::{hashes::Hash, p2p::message::CommandString};
 use thiserror::Error;
+
+use crate::{
+    blockdata::block::Header,
+    client::message::{Message, MessageCommand},
+    consensus::{Decodable, Encodable},
+    hashes::Sha256Hash,
+    io::{Error as IoError, Read, Write},
+    p2p::Magic,
+};
 
 /// Errors that can occur during network message handling.
 #[derive(Debug, Error)]
@@ -74,7 +77,9 @@ pub struct NetworkMessageHeader {
 
 impl NetworkMessageHeader {
     /// Size of the network message header in bytes.
-    pub const SIZE: usize = 24; // 4 (magic) + 12 (command) + 4 (length) + 4 (checksum)
+    pub const SIZE: usize = 24;
+
+    // 4 (magic) + 12 (command) + 4 (length) + 4 (checksum)
 
     /// Creates a new network message header.
     pub fn new(
@@ -346,13 +351,18 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::blockdata::block::BitcoinHeader;
-    use crate::client::message::connection::{SendCmpct, Version};
-    use crate::client::message::{Connection, Message};
-    use crate::network::Network;
-    use crate::p2p::address::AddrV2;
     use std::net::Ipv4Addr;
+
+    use super::*;
+    use crate::{
+        blockdata::block::BitcoinHeader,
+        client::message::{
+            Connection, Message,
+            connection::{SendCmpct, Version},
+        },
+        network::Network,
+        p2p::address::AddrV2,
+    };
 
     #[test]
     fn test_network_message_header_roundtrip() {

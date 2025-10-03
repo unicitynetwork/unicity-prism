@@ -1,9 +1,9 @@
-use crate::p2p::ServiceFlags;
-use crate::p2p::address::AddrV2;
 use alpha_p2p_derive::ConsensusCodec;
 use bitcoin::p2p::address::Address as NetAddress;
 use chrono::Utc;
 use rand::{RngCore, rng};
+
+use crate::p2p::{ServiceFlags, address::AddrV2};
 
 /// If the node can relay transactions or not.
 const IS_RELAY: bool = false;
@@ -33,7 +33,8 @@ pub struct Version {
     pub addr_from: NetAddress,
     /// A unique identifier for the connection, typically a random nonce.
     pub nonce: u64,
-    /// The user agent string of the node, typically identifying the software and version.
+    /// The user agent string of the node, typically identifying the software
+    /// and version.
     pub user_agent: String,
     /// The last block height known to the sending node.
     pub start_height: i32,
@@ -124,7 +125,8 @@ impl Version {
         }
     }
 
-    /// Creates a new Version message with the given parameters and custom nonce.
+    /// Creates a new Version message with the given parameters and custom
+    /// nonce.
     ///
     /// # Arguments
     ///
@@ -275,7 +277,8 @@ impl Version {
     ///
     /// # Returns
     ///
-    /// * `bool` - Whether the node wants to receive relayed transactions or not.
+    /// * `bool` - Whether the node wants to receive relayed transactions or
+    ///   not.
     pub fn relay(&self) -> bool {
         self.relay
     }
@@ -283,10 +286,13 @@ impl Version {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::consensus::{Decodable, Encodable};
-    use crate::p2p::address::AddrV2;
     use std::net::Ipv4Addr;
+
+    use super::*;
+    use crate::{
+        consensus::{Decodable, Encodable},
+        p2p::address::AddrV2,
+    };
 
     // Helper function to create a test AddrV2
     fn create_test_addr_v2() -> AddrV2 {
@@ -399,9 +405,11 @@ mod tests {
 
     #[test]
     fn test_version_encode_decode_with_known_hex_data() {
-        use crate::consensus::{Decodable, Encodable};
-        use bitcoin::p2p::address::Address as NetAddress;
         use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+
+        use bitcoin::p2p::address::Address as NetAddress;
+
+        use crate::consensus::{Decodable, Encodable};
 
         // Known hex data from the example
         let hex_data = "72110100\
@@ -425,14 +433,16 @@ mod tests {
         let services = ServiceFlags::NETWORK; // NODE_NETWORK
         let timestamp = 1415483324i64;
 
-        // Receiving node address: 00000000000000000000ffffc61b6409 (198.27.100.9) port 208d (8333)
+        // Receiving node address: 00000000000000000000ffffc61b6409 (198.27.100.9) port
+        // 208d (8333)
         let recv_ip = IpAddr::V6(Ipv6Addr::from([
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 198, 27, 100, 9,
         ]));
         let recv_socket = SocketAddr::new(recv_ip, 8333);
         let addr_recv = NetAddress::new(&recv_socket, services);
 
-        // Transmitting node address: 00000000000000000000ffffcb0071c0 (203.0.113.192) port 208d (8333)
+        // Transmitting node address: 00000000000000000000ffffcb0071c0 (203.0.113.192)
+        // port 208d (8333)
         let from_ip = IpAddr::V6(Ipv6Addr::from([
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 203, 0, 113, 192,
         ]));

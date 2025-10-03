@@ -1,8 +1,8 @@
 //! Genesis block information for the Unicity network.
 
-use crate::blockdata::block::BlockHash;
-use crate::hashes::Hash;
 use serde::{Deserialize, Serialize};
+
+use crate::{blockdata::block::BlockHash, hashes::Hash};
 
 /// Genesis block information for different networks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,7 +30,8 @@ impl GenesisInfo {
     ///
     /// # Returns
     ///
-    /// * `GenesisInfo` - The genesis block information for the specified network
+    /// * `GenesisInfo` - The genesis block information for the specified
+    ///   network
     pub fn for_network(network: crate::network::Network) -> Self {
         match network {
             crate::network::Network::Mainnet => Self::mainnet(),

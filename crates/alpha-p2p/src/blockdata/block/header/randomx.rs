@@ -1,26 +1,31 @@
 //! RandomX block header implementation.
 //!
-//! This module provides a custom block header implementation for blocks using the RandomX
-//! proof-of-work algorithm. RandomX is a proof-of-work algorithm that is optimized for
-//! general-purpose CPUs and is designed to be ASIC-resistant.
+//! This module provides a custom block header implementation for blocks using
+//! the RandomX proof-of-work algorithm. RandomX is a proof-of-work algorithm
+//! that is optimized for general-purpose CPUs and is designed to be
+//! ASIC-resistant.
 
-use crate::blockdata::block::Header;
-use crate::hashes::Hash;
-use crate::pow::{CompactTarget, Target};
 use alpha_p2p_derive::ConsensusCodec;
-use bitcoin::block::ValidationError;
 pub use bitcoin::block::{BlockHash, TxMerkleNode, Version};
-use bitcoin::consensus::Encodable;
+use bitcoin::{block::ValidationError, consensus::Encodable};
 use serde::{Deserialize, Serialize};
+
+use crate::{
+    blockdata::block::Header,
+    hashes::Hash,
+    pow::{CompactTarget, Target},
+};
 
 /// Alpha block header for RandomX-based blocks.
 ///
 /// This header contains all standard Bitcoin block fields plus an additional
-/// RandomX hash field. It's designed for blocks that use the RandomX proof-of-work
-/// algorithm, which is optimized for CPU mining and resistant to ASICs.
+/// RandomX hash field. It's designed for blocks that use the RandomX
+/// proof-of-work algorithm, which is optimized for CPU mining and resistant to
+/// ASICs.
 ///
 /// The header includes:
-/// - Standard Bitcoin fields (version, previous hash, merkle root, timestamp, bits, nonce)
+/// - Standard Bitcoin fields (version, previous hash, merkle root, timestamp,
+///   bits, nonce)
 /// - Additional RandomX hash field for the RandomX proof-of-work
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ConsensusCodec,
@@ -34,8 +39,9 @@ pub struct RandomXHeader {
 
     /// Reference to the previous block in the chain.
     ///
-    /// This creates the cryptographic link between blocks, forming the blockchain.
-    /// Each block must reference the hash of the previous block to be valid.
+    /// This creates the cryptographic link between blocks, forming the
+    /// blockchain. Each block must reference the hash of the previous block
+    /// to be valid.
     pub previous_header: BlockHash,
 
     /// The root hash of the merkle tree of transactions in the block.
@@ -47,7 +53,8 @@ pub struct RandomXHeader {
     /// The timestamp of the block, as claimed by the miner.
     ///
     /// This is a Unix timestamp indicating when the block was created.
-    /// It's used in difficulty adjustment and has some constraints on valid values.
+    /// It's used in difficulty adjustment and has some constraints on valid
+    /// values.
     pub timestamp: u32,
 
     /// The target value below which the blockhash must lie.
@@ -76,7 +83,9 @@ impl Header for RandomXHeader {
     ///
     /// RandomX headers are 112 bytes, which is 32 bytes larger than standard
     /// Bitcoin headers due to the additional randomx_hash field.
-    const SIZE: usize = 4 + 32 + 32 + 4 + 4 + 4 + 32; // 112
+    const SIZE: usize = 4 + 32 + 32 + 4 + 4 + 4 + 32;
+
+    // 112
 
     /// Computes the block hash using Bitcoin's double-SHA256 algorithm.
     ///
@@ -99,7 +108,8 @@ impl Header for RandomXHeader {
     /// Extracts the difficulty target from the header.
     ///
     /// This method converts the compact target (bits) to a full 256-bit target
-    /// value that can be used for difficulty calculations and proof-of-work validation.
+    /// value that can be used for difficulty calculations and proof-of-work
+    /// validation.
     ///
     /// # Returns
     ///
@@ -111,22 +121,26 @@ impl Header for RandomXHeader {
 
     /// Validates the proof of work against the required target.
     ///
-    /// This method should verify that the RandomX hash is below the required target,
-    /// confirming that the miner has performed sufficient RandomX work to satisfy the difficulty.
+    /// This method should verify that the RandomX hash is below the required
+    /// target, confirming that the miner has performed sufficient RandomX
+    /// work to satisfy the difficulty.
     ///
     /// # Arguments
     ///
-    /// * `_required_target` - The target that the RandomX hash must be below to be valid
+    /// * `_required_target` - The target that the RandomX hash must be below to
+    ///   be valid
     ///
     /// # Returns
     ///
-    /// * `Ok(BlockHash)` - If the proof of work is valid, returns the block hash
+    /// * `Ok(BlockHash)` - If the proof of work is valid, returns the block
+    ///   hash
     /// * `Err(ValidationError)` - If the proof of work is invalid
     ///
     /// # TODO
     ///
     /// This method is currently unimplemented and needs to be completed.
-    /// It should validate the RandomX hash against the target, not the block hash.
+    /// It should validate the RandomX hash against the target, not the block
+    /// hash.
     fn validate_pow(&self, _required_target: Target) -> Result<BlockHash, ValidationError> {
         // TODO: Implement RandomX proof-of-work validation
         // This should validate that self.randomx_hash is below the required_target
