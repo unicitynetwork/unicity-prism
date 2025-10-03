@@ -8,9 +8,11 @@
 //! block headers.
 //!
 use alpha_p2p_derive::ConsensusCodec;
+use bitcoin::BlockHash;
+use bitcoin::Target as BitcoinTarget;
+use bitcoin::hashes::Hash;
 use primitive_types::U256;
 use serde::{Deserialize, Serialize};
-use bitcoin::Target as BitcoinTarget;;
 
 /// Represents a target value expressed as an unsigned 256-bit integer.
 ///
@@ -58,6 +60,7 @@ impl Target {
     /// let target = Target::new(U256::from(100));
     /// # assert_eq!(target.0, U256::from(100));
     /// ```
+    #[allow(dead_code)]
     pub(crate) const fn new(target: U256) -> Self {
         Target(target)
     }
@@ -83,6 +86,54 @@ impl Target {
     /// ```
     pub fn from_hex(hex: &str) -> Option<Self> {
         U256::from_str_radix(hex, 16).ok().map(Target)
+    }
+
+    /// Creates a new `Target` from a block hash.
+    ///
+    /// # Arguments
+    ///
+    /// * `hash` - A block hash to convert to a target
+    ///
+    /// # Returns
+    ///
+    /// A new `Target` instance
+    pub fn from_hash(hash: BlockHash) -> Self {
+        Target(U256::from_big_endian(hash.as_byte_array()))
+    }
+
+    /// Creates a new `Target` for the mainnet/testnet max target in a const context.
+    ///
+    /// # Returns
+    ///
+    /// A new `Target` instance with the mainnet/testnet max target value
+    pub const fn mainnet_max_target() -> Self {
+        // Mainnet and testnet max target: 0x00000000ffff0000000000000000000000000000000000000000000000000000
+        Target(U256([0x00000000, 0x00000000, 0x00000000, 0x00000000]))
+    }
+
+    /// Creates a new `Target` for the regtest max target in a const context.
+    ///
+    /// # Returns
+    ///
+    /// A new `Target` instance with the regtest max target value
+    pub const fn regtest_max_target() -> Self {
+        // Regtest max target: 0x7fffff00000000000000000000000000000000000000000000000000000000
+        Target(U256([0x00000000, 0x00000000, 0x00000000, 0x7fffff00]))
+    }
+
+    /// Creates a new `Target` from a u64 value in a const context.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - A u64 value to convert to Target
+    ///
+    /// # Returns
+    ///
+    /// A new `Target` instance
+    pub const fn from_u64_const(value: u64) -> Self {
+        // Create a U256 from the low bits of the u64 value
+        // U256([low, high, higher, highest])
+        Target(U256([value, 0, 0, 0]))
     }
 
     /// Creates a new `Target` from bytes representing a 256-bit target value.
@@ -218,6 +269,15 @@ impl Target {
         Some(diff as f64)
     }
 
+    /// Converts the target to a work value.
+    ///
+    /// Work is the inverse of the target value, representing the expected number
+    /// of hash attempts required to find a valid block hash below the target.
+    ///
+    /// # Returns
+    ///
+    /// * `Some(Work)` - The calculated work value
+    /// * `None` - If the calculation fails (should not happen for valid targets)
     pub fn to_work(self) -> Option<Work> {
         // Handle edge cases
         if self.0.is_zero() {
@@ -440,6 +500,7 @@ impl Target {
     /// # Returns
     ///
     /// * `[u8; 32]` - A 32-byte array containing the big-endian representation of the target.
+    #[allow(dead_code)]
     fn to_big_endian(self) -> [u8; 32] {
         self.0.to_big_endian()
     }
@@ -477,6 +538,15 @@ impl From<Target> for BitcoinTarget {
 pub struct CompactTarget(u32);
 
 impl CompactTarget {
+    /// Creates a new CompactTarget from a 32-bit value.
+    ///
+    /// # Arguments
+    ///
+    /// * `target` - The 32-bit value representing the compact target
+    ///
+    /// # Returns
+    ///
+    /// A new CompactTarget instance
     pub fn new(target: u32) -> Self {
         CompactTarget(target)
     }
@@ -488,9 +558,23 @@ impl From<Target> for Option<CompactTarget> {
     }
 }
 
+/// Represents the work required to mine a block.
+///
+/// Work is the inverse of the target value, representing the expected number
+/// of hash attempts required to find a valid block hash below the target.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Work(U256);
 
 impl Work {
+    /// Creates a new Work instance with the specified U256 value.
+    ///
+    /// # Arguments
+    ///
+    /// * `work` - A U256 value representing the work to be stored
+    ///
+    /// # Returns
+    ///
+    /// Returns a new Work instance containing the provided U256 value
     pub fn new(work: U256) -> Self {
         Work(work)
     }
@@ -499,6 +583,7 @@ impl Work {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn test_zero_target() {
@@ -1114,5 +1199,21 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_from_hash() {
+        let hash_hex = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+        let hash = BlockHash::from_str(hash_hex).unwrap();
+        let target = Target::from_hash(hash);
+
+        // Verify the target was created correctly
+        let expected_bytes = [
+            0x00, 0x00, 0x00, 0x00, 0x01, 0x9d, 0x66, 0x89, 0xc0, 0x85, 0xae, 0x16, 0x58, 0x31,
+            0xe9, 0x34, 0xff, 0x76, 0x3a, 0xe4, 0x6a, 0x2a, 0x6c, 0x17, 0x2b, 0x3f, 0x1b, 0x60,
+            0xa8, 0xce, 0x26, 0xf,
+        ];
+        let expected_target = Target::from_big_endian(&expected_bytes);
+        assert_eq!(target, expected_target);
     }
 }
