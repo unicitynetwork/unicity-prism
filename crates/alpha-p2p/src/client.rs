@@ -1,22 +1,16 @@
-use crate::client::peer::Peer;
-use crate::Network;
-use std::path::PathBuf;
+//! Client module for Alpha P2P protocol implementation.
+//!
+//! This module provides the core client functionality for connecting to Alpha peers,
+//! performing handshakes, and synchronizing blockchain data.
 
+pub mod connection;
+pub mod handshake;
 pub mod message;
-mod peer;
+pub mod network;
+pub mod peer;
+pub mod sync;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Config {
-    pub network: Network,
-    pub max_connections: u64,
-    pub data_dir: PathBuf,
-    pub user_agent: String,
-    pub disabled_peer_discovery: bool,
-    pub disable_dns_seeds: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Client {
-    config: Config,
-    peers: Vec<Peer>,
-}
+pub use connection::{ConnectionConfig, ConnectionError, ConnectionManager};
+pub use handshake::{HandshakeHandler, PeerInfo};
+pub use message::{Connection, Message, Request, Response};
+pub use sync::{BlockSynchronizer, SyncConfig, SyncProgress};
