@@ -1,4 +1,5 @@
 pub(crate) mod address;
+/// P2P protocol message types and functionality.
 pub mod message;
 
 use crate::consensus::Params;
@@ -20,12 +21,26 @@ impl Magic {
     /// Unicity regression test network magic bytes.
     pub const REGTEST: Self = Self([0xc9, 0xaf, 0xae, 0xe9]);
 
+    /// Returns the magic bytes as a 4-byte array.
+    ///
+    /// # Returns
+    ///
+    /// A 4-byte array containing the magic bytes
     pub fn to_bytes(&self) -> [u8; 4] {
         self.0
     }
 
+    /// Creates a Magic instance from consensus parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - The consensus parameters containing the network information
+    ///
+    /// # Returns
+    ///
+    /// A Magic instance corresponding to the network in the parameters
     pub fn from_params(params: impl AsRef<Params>) -> Self {
-        params.as_ref().network.clone().into()
+        params.as_ref().network.into()
     }
 }
 
@@ -41,7 +56,7 @@ impl From<Network> for Magic {
 
 impl std::fmt::Display for Magic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(hex::encode(self.0).fmt(f)?)
+        hex::encode(self.0).fmt(f)
     }
 }
 
@@ -59,8 +74,10 @@ impl Decodable for Magic {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Error)]
+/// Errors that can occur when working with magic bytes.
+#[derive(Debug, PartialEq, Clone, Copy, Error)]
 pub enum MagicError {
+    /// The magic bytes don't correspond to any known network.
     #[error("unknown network magic: {0}")]
     UnknownMagic(Magic),
 }
