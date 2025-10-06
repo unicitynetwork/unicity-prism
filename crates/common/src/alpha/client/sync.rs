@@ -99,7 +99,13 @@ impl BlockSynchronizer {
         // Update progress with peer's best height
         {
             let mut progress = self.progress.write().await;
-            progress.last_known_height = u64::try_from(peer_best_height).unwrap_or(0);
+            progress.last_known_height = match u64::try_from(peer_best_height) {
+                Ok(height) => height,
+                Err(e) => {
+                    warn!("Failed to convert peer best height {} to u64: {}", peer_best_height, e);
+                    0
+                }
+            };
         }
 
         // Start with the genesis block hash
@@ -281,7 +287,15 @@ impl BlockSynchronizer {
         let mut blocks_received: i32 = 0;
         let expected_blocks = block_hashes.len();
 
-        while blocks_received < i32::try_from(expected_blocks).unwrap_or(i32::MAX) {
+        let expected_blocks_i32 = match i32::try_from(expected_blocks) {
+            Ok(count) => count,
+            Err(e) => {
+                warn!("Failed to convert expected blocks count {} to i32: {}", expected_blocks, e);
+                i32::MAX
+            }
+        };
+
+        while blocks_received < expected_blocks_i32 {
             let message = connection.receive_message::<H>(stream).await?;
 
             match message {

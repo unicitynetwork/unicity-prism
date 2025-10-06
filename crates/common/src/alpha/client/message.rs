@@ -14,7 +14,7 @@
 // See: https://developer.bitcoin.org/reference/p2p_networking.html#data-messages
 // Only requests are implemented as this client is not meant to relay.
 
-pub(crate) mod connection;
+pub mod connection;
 pub mod get_data;
 pub mod inventory;
 pub(crate) mod request;
