@@ -287,7 +287,7 @@ mod tests {
         let handler = HandshakeHandler::new(user_agent, start_height);
 
         let peer_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8333);
-        let version_msg = handler.create_version_message(peer_addr).unwrap();
+        let version_msg = handler.create_version_message(peer_addr).expect("Failed to create version message");
 
         assert_eq!(version_msg.version(), 70016); // Default protocol version
         assert_eq!(version_msg.start_height(), 0);

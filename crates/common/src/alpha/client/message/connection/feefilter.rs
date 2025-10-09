@@ -274,7 +274,7 @@ mod tests {
         let network_msg = NetworkMessage::new(manager.magic(), message);
         assert!(network_msg.is_ok());
 
-        let network_msg = network_msg.unwrap();
+        let network_msg = network_msg.expect("Failed to create network message");
 
         // Verify the command is "feefilter"
         assert_eq!(network_msg.header.command.to_string(), "feefilter");
@@ -282,7 +282,7 @@ mod tests {
         // Serialize the network message to bytes
         let bytes = network_msg.to_bytes();
         assert!(bytes.is_ok());
-        let bytes = bytes.unwrap();
+        let bytes = bytes.expect("Failed to serialize network message");
 
         // Verify the payload contains the expected feerate
         // The payload should start after the 24-byte header
@@ -303,7 +303,7 @@ mod tests {
 
         // Deserialize the bytes
         let mut cursor = Cursor::new(&hex_bytes);
-        let feefilter = FeeFilter::consensus_decode(&mut cursor).unwrap();
+        let feefilter = FeeFilter::consensus_decode(&mut cursor).expect("Failed to decode FeeFilter");
 
         // Verify the fee rate is 48,508 satoshis per kilobyte
         assert_eq!(feefilter.feerate(), 48508);
@@ -319,11 +319,11 @@ mod tests {
 
             // Serialize
             let mut serialized = Vec::new();
-            feefilter.consensus_encode(&mut serialized).unwrap();
+            feefilter.consensus_encode(&mut serialized).expect("Failed to encode FeeFilter");
 
             // Deserialize
             let mut cursor = Cursor::new(&serialized);
-            let deserialized = FeeFilter::consensus_decode(&mut cursor).unwrap();
+            let deserialized = FeeFilter::consensus_decode(&mut cursor).expect("Failed to decode FeeFilter");
 
             // Verify round-trip
             assert_eq!(deserialized.feerate(), feerate);

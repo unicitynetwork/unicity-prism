@@ -11,14 +11,14 @@ use tokio::{
     net::TcpStream,
     time::timeout,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::alpha::{
     blockdata::block::{BitcoinHeader, Header},
     client::{
-        Message,
         message::MessageCommand,
         network::{NetworkError, NetworkMessage, NetworkMessageHeader},
+        Message,
     },
     consensus::Decodable,
     hashes::ChecksumHash,
@@ -341,7 +341,19 @@ impl ConnectionManager {
         self.validate_payload_size(&header)?;
 
         // Read payload
-        let payload_size = usize::try_from(header.length).unwrap_or(0);
+        let payload_size = match usize::try_from(header.length) {
+            Ok(size) => size,
+            Err(e) => {
+                warn!(
+                    "Failed to convert payload length {} to usize: {}",
+                    header.length, e
+                );
+                return Err(ConnectionError::InvalidMessage(format!(
+                    "Invalid payload length: {}",
+                    header.length
+                )));
+            }
+        };
         debug!("Reading {} payload: {} bytes", header.command, payload_size);
 
         let payload_bytes = if payload_size > 0 {
@@ -457,7 +469,7 @@ mod tests {
     use super::*;
     use crate::alpha::{
         blockdata::block::BitcoinHeader,
-        client::message::{Connection, Message, connection::Version},
+        client::message::{connection::Version, Connection, Message},
         p2p::address::AddrV2,
     };
 

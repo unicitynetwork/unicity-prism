@@ -274,12 +274,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Connect to peers and start synchronization
     let mut successful_connections = 0usize;
-    for peer_addr in peer_addresses {
+    for peer_addr in &peer_addresses {
         match connect_and_sync(
             &connection_manager,
             &handshake_handler,
             &block_synchronizer,
-            peer_addr,
+            *peer_addr,
         )
         .await
         {
@@ -302,6 +302,87 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         progress.headers_synced,
         progress.blocks_downloaded
     );
+
+    // NOTE: KEEP THIS COMMENTED OUT FOR NOW - KEEP-ALIVE MECHANISM
+    // info!("Starting keep-alive mechanism...");
+    // let keep_alive_interval = std::time::Duration::from_secs(30); // Send ping every 30 seconds
+    //
+    // // Create a vector to store active connections for keep-alive
+    // let mut active_connections = Vec::new();
+    //
+    // // Reconnect to peers for keep-alive
+    // for peer_addr in peer_addresses {
+    //     match connection_manager.connect(peer_addr).await {
+    //         Ok(mut stream) => {
+    //             info!("Reconnected to peer for keep-alive: {}", peer_addr);
+    //
+    //             // Perform handshake again
+    //             match handshake_handler
+    //                 .perform_handshake::<BitcoinHeader>(&connection_manager, &mut stream, peer_addr)
+    //                 .await
+    //             {
+    //                 Ok(peer_info) => {
+    //                     info!(
+    //                         "Handshake completed for keep-alive with peer: {}",
+    //                         peer_addr
+    //                     );
+    //                     active_connections.push((peer_addr, stream, peer_info));
+    //                 }
+    //                 Err(e) => {
+    //                     error!("Keep-alive handshake failed with peer {}: {}", peer_addr, e);
+    //                 }
+    //             }
+    //         }
+    //         Err(e) => {
+    //             error!(
+    //                 "Failed to reconnect to peer {} for keep-alive: {}",
+    //                 peer_addr, e
+    //             );
+    //         }
+    //     }
+    // }
+    //
+    // if active_connections.is_empty() {
+    //     warn!("No active connections available for keep-alive mechanism");
+    // } else {
+    //     info!(
+    //         "Keep-alive mechanism started with {} active connections",
+    //         active_connections.len()
+    //     );
+    //
+    //     // Run keep-alive loop
+    //     let mut ping_counter = 0;
+    //     loop {
+    //         tokio::time::sleep(keep_alive_interval).await;
+    //         ping_counter += 1;
+    //
+    //         info!(
+    //             "Sending keep-alive ping #{} to {} peers",
+    //             ping_counter,
+    //             active_connections.len()
+    //         );
+    //
+    //         for (peer_addr, stream, _) in &mut active_connections {
+    //             let ping = unicity_prism_common::alpha::client::message::connection::Ping::new();
+    //             let message =
+    //                 unicity_prism_common::alpha::client::Message::<BitcoinHeader>::Connection(
+    //                     unicity_prism_common::alpha::client::message::Connection::Ping(ping),
+    //                 );
+    //
+    //             match connection_manager.send_message(stream, message).await {
+    //                 Ok(_) => {
+    //                     debug!("Keep-alive ping sent to peer: {}", peer_addr);
+    //                 }
+    //                 Err(e) => {
+    //                     error!(
+    //                         "Failed to send keep-alive ping to peer {}: {}",
+    //                         peer_addr, e
+    //                     );
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
     Ok(())
 }
