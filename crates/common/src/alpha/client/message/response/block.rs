@@ -224,7 +224,7 @@ mod tests {
             block::{BitcoinHeader, WitnessMerkleNode},
             transaction::Transaction,
         },
-        consensus::{Decodable, Encodable},
+        consensus::Decodable,
         hashes::Hash,
     };
 

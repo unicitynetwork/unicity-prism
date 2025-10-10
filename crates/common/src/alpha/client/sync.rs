@@ -4,14 +4,15 @@
 //! peers, including requesting block headers using GetHeaders and downloading
 //! full blocks using GetData messages.
 
-use primitive_types::U256;
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
 use std::{
-    path::{Path, PathBuf},
+    collections::{HashMap, HashSet},
+    path::PathBuf,
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+
+use primitive_types::U256;
+use serde::{Deserialize, Serialize};
 use tokio::{
     fs,
     net::TcpStream,
@@ -21,20 +22,20 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::alpha::client::Connection;
 use crate::alpha::{
     blockdata::{
         block::{BlockHash, Header},
         genesis::GenesisInfo,
     },
     client::{
+        Connection,
         connection::{ConnectionError, ConnectionManager},
         database::BlockDatabase,
         message::{
-            get_data::{GetData, Inventory}, request::GetHeaders, response::{Headers, StandardBlock},
-            Message,
-            Request,
-            Response,
+            Message, Request, Response,
+            get_data::{GetData, Inventory},
+            request::GetHeaders,
+            response::{Headers, StandardBlock},
         },
     },
     consensus::Params,
@@ -72,6 +73,8 @@ impl Default for ChainState {
 /// Configuration for block synchronization.
 #[derive(Debug, Clone)]
 pub struct SyncConfig {
+    /// Network type (mainnet, testnet, regtest)
+    pub network: Network,
     /// Maximum number of block headers to request in a single GetHeaders
     /// message.
     pub max_headers_per_request: usize,
@@ -94,6 +97,7 @@ pub struct SyncConfig {
 impl Default for SyncConfig {
     fn default() -> Self {
         Self {
+            network: Network::Testnet,          // Default to testnet for safety
             max_headers_per_request: 2000,      // Alpha protocol limit
             max_blocks_to_download: usize::MAX, // Unlimited by default
             download_full_blocks: true,
@@ -155,8 +159,6 @@ struct BufferedBlock<H: Header> {
     hash: BlockHash,
     /// The previous block hash
     previous_hash: BlockHash,
-    /// Whether this block has been processed
-    processed: bool,
 }
 
 /// Handles blockchain synchronization with peers.
@@ -197,8 +199,11 @@ impl BlockSynchronizer {
 
     /// Determines the block type based on height and consensus parameters.
     fn determine_block_type(&self, height: u64, params: &Params) -> &'static str {
-        if height >= params.randomx_height as u64 {
-            if height >= params.randomx_enforcement_height as u64 {
+        let randomx_height = params.randomx_height;
+        let randomx_enforcement_height = params.randomx_enforcement_height;
+
+        if height >= randomx_height {
+            if height >= randomx_enforcement_height {
                 "RandomX (enforced)"
             } else {
                 "RandomX (transition)"
@@ -208,37 +213,23 @@ impl BlockSynchronizer {
         }
     }
 
-    /// Checks if a block should use RandomX validation based on its height.
-    fn should_use_randomx(&self, height: u64, params: &Params) -> bool {
-        height >= params.randomx_height as u64
-    }
-
     /// Gets the appropriate consensus parameters for the current network.
-    fn get_consensus_params(&self) -> Params {
-        // For now, we'll determine based on the data directory or default to mainnet
-        // In a real implementation, this should be configurable
-        if let Some(ref data_dir) = self.config.data_dir {
-            if data_dir.to_string_lossy().contains("testnet") {
-                Params::TESTNET
-            } else if data_dir.to_string_lossy().contains("regtest") {
-                Params::REGTEST
-            } else {
-                Params::MAINNET
-            }
-        } else {
-            // Default to mainnet if no data directory is configured
-            Params::MAINNET
+    fn consensus_params(&self) -> Params {
+        match self.config.network {
+            Network::Mainnet => Params::MAINNET,
+            Network::Testnet => Params::TESTNET,
+            Network::Regtest => Params::REGTEST,
         }
     }
 
     /// Gets the network type for this synchronizer.
-    fn get_network(&self) -> Network {
-        self.get_consensus_params().network
+    fn network(&self) -> Network {
+        self.consensus_params().network
     }
 
     /// Gets the genesis block hash for the current network.
-    fn get_genesis_hash(&self) -> BlockHash {
-        GenesisInfo::for_network(self.get_network()).hash
+    fn genesis_hash(&self) -> BlockHash {
+        GenesisInfo::for_network(self.network()).hash
     }
 
     /// Creates a new block synchronizer with a database.
@@ -263,21 +254,25 @@ impl BlockSynchronizer {
 
     /// Initializes the database if a data directory is configured.
     pub async fn initialize_database(&mut self) -> Result<(), ConnectionError> {
-        if self.database.is_none() {
-            if let Some(data_dir) = &self.config.data_dir {
-                let db_path = data_dir.join("blockchain.db");
-                let db = Arc::new(BlockDatabase::open(&db_path).await.map_err(|e| {
-                    ConnectionError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
-                })?);
+        if self.database.is_none() && self.config.data_dir.is_some() {
+            let data_dir = match self.config.data_dir.as_ref() {
+                Some(dir) => dir,
+                None => return Ok(()),
+            };
+            let db_path = data_dir.join("blockchain.db");
+            let db = Arc::new(
+                BlockDatabase::open(&db_path)
+                    .await
+                    .map_err(|e| ConnectionError::Io(std::io::Error::other(e)))?,
+            );
 
-                // Migrate from JSON if needed
-                db.migrate_from_json(data_dir).await.map_err(|e| {
-                    ConnectionError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
-                })?;
+            // Migrate from JSON if needed
+            db.migrate_from_json(data_dir)
+                .await
+                .map_err(|e| ConnectionError::Io(std::io::Error::other(e)))?;
 
-                self.database = Some(db);
-                info!("Database initialized at: {}", db_path.display());
-            }
+            self.database = Some(db);
+            info!("Database initialized at: {}", db_path.display());
         }
         Ok(())
     }
@@ -285,9 +280,10 @@ impl BlockSynchronizer {
     /// Loads chain state from database if available.
     pub async fn load_state(&self) -> Result<(), ConnectionError> {
         if let Some(database) = &self.database {
-            let state = database.get_chain_state().await.map_err(|e| {
-                ConnectionError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
-            })?;
+            let state = database
+                .get_chain_state()
+                .await
+                .map_err(|e| ConnectionError::Io(std::io::Error::other(e)))?;
 
             info!(
                 "Loaded chain state from database: tip height {}",
@@ -300,7 +296,7 @@ impl BlockSynchronizer {
                 if state_file.exists() {
                     let content = fs::read_to_string(&state_file)
                         .await
-                        .map_err(|e| ConnectionError::Io(e))?;
+                        .map_err(ConnectionError::Io)?;
                     let state: ChainState = serde_json::from_str(&content).map_err(|e| {
                         ConnectionError::InvalidMessage(format!(
                             "Failed to parse chain state: {}",
@@ -366,9 +362,10 @@ impl BlockSynchronizer {
     /// Sets the chain tip.
     pub async fn set_chain_tip(&self, hash: BlockHash, height: u64) -> Result<(), ConnectionError> {
         if let Some(database) = &self.database {
-            database.set_chain_tip(hash, height).await.map_err(|e| {
-                ConnectionError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
-            })?;
+            database
+                .set_chain_tip(hash, height)
+                .await
+                .map_err(|e| ConnectionError::Io(std::io::Error::other(e)))?;
         }
         // If no database, we can't persist the state
         Ok(())
@@ -380,7 +377,7 @@ impl BlockSynchronizer {
             database
                 .add_block_to_state(hash, height)
                 .await
-                .map_err(|e| ConnectionError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))
+                .map_err(|e| ConnectionError::Io(std::io::Error::other(e)))
         } else {
             // If no database, we can't persist the state
             warn!("No database available, cannot persist block");
@@ -481,14 +478,22 @@ impl BlockSynchronizer {
         self.load_state().await?;
 
         // Update progress with peer's best height
-        let peer_best_height = match u64::try_from(peer_best_height) {
-            Ok(height) => height,
-            Err(e) => {
-                warn!(
-                    "Failed to convert peer best height {} to u64: {}",
-                    peer_best_height, e
-                );
-                0
+        let peer_best_height = if peer_best_height < 0 {
+            warn!(
+                "Peer best height is negative: {}, using 0",
+                peer_best_height
+            );
+            0
+        } else {
+            match u64::try_from(peer_best_height) {
+                Ok(height) => height,
+                Err(e) => {
+                    warn!(
+                        "Failed to convert peer best height {} to u64: {}",
+                        peer_best_height, e
+                    );
+                    u64::MAX
+                }
             }
         };
 
@@ -540,6 +545,7 @@ impl BlockSynchronizer {
     }
 
     /// Synchronizes blocks from the current tip to the target height.
+    #[allow(clippy::too_many_arguments)]
     async fn sync_from_tip<H>(
         &self,
         connection: &ConnectionManager,
@@ -556,8 +562,8 @@ impl BlockSynchronizer {
             current_tip_height, target_height
         );
 
-        let mut total_headers_synced = 0;
-        let mut total_blocks_downloaded = 0;
+        let mut total_headers_synced: usize = 0;
+        let mut total_blocks_downloaded: usize = 0;
         let start_time = std::time::Instant::now();
 
         loop {
@@ -603,7 +609,7 @@ impl BlockSynchronizer {
 
             // Process headers
             let headers_count = headers.len();
-            total_headers_synced += headers_count;
+            total_headers_synced = total_headers_synced.saturating_add(headers_count);
 
             info!(
                 "Received {} headers (total: {})",
@@ -613,21 +619,36 @@ impl BlockSynchronizer {
             // Process each header
             for (i, header) in headers.headers().iter().enumerate() {
                 let block_hash = header.block_hash();
-                let block_height = current_tip_height + 1 + i as u64;
+                let block_height = current_tip_height.checked_add(1).unwrap_or_else(|| {
+                    error!("Current tip height + 1 would overflow, using max value");
+                    u64::MAX
+                });
+
+                let block_height = block_height
+                    .checked_add(u64::try_from(i).unwrap_or_else(|_| {
+                        error!("Failed to convert index {} to u64, using max value", i);
+                        u64::MAX
+                    }))
+                    .unwrap_or_else(|| {
+                        error!("Block height calculation would overflow, using max value");
+                        u64::MAX
+                    });
 
                 // Get consensus parameters to check for hard fork
-                let params = self.get_consensus_params();
+                let params = self.consensus_params();
                 let block_type = self.determine_block_type(block_height, &params);
 
                 // Log hard fork transitions
-                if block_height == params.randomx_height as u64 {
+                let randomx_height = params.randomx_height;
+                if block_height == randomx_height {
                     warn!(
                         "=== RANDOMX HARD FORK ACTIVATION AT HEIGHT {} ===",
                         block_height
                     );
                     info!("Switching from SHA256D to RandomX proof-of-work");
                 }
-                if block_height == params.randomx_enforcement_height as u64 {
+                let randomx_enforcement_height = params.randomx_enforcement_height;
+                if block_height == randomx_enforcement_height {
                     warn!(
                         "=== RANDOMX ENFORCEMENT BEGINS AT HEIGHT {} ===",
                         block_height
@@ -658,18 +679,56 @@ impl BlockSynchronizer {
             {
                 let mut progress = self.progress.write().await;
                 progress.headers_synced = total_headers_synced;
-                progress.current_height = current_tip_height + headers_count as u64;
+                let headers_count_u64 = u64::try_from(headers_count).unwrap_or_else(|_| {
+                    error!(
+                        "Failed to convert headers_count {} to u64, using max value",
+                        headers_count
+                    );
+                    u64::MAX
+                });
+
+                progress.current_height = current_tip_height
+                    .checked_add(headers_count_u64)
+                    .unwrap_or_else(|| {
+                        error!("Current height calculation would overflow, using max value");
+                        u64::MAX
+                    });
 
                 // Calculate sync rate
                 let elapsed = start_time.elapsed().as_secs_f64();
+                #[allow(clippy::float_arithmetic, reason = "For display purposes")]
                 if elapsed > 0.0 {
                     progress.sync_rate = total_headers_synced as f64 / elapsed;
                 }
 
                 // Calculate ETA
                 if progress.sync_rate > 0.0 && target_height > progress.current_height {
-                    let remaining = target_height - progress.current_height;
-                    progress.eta_seconds = Some((remaining as f64 / progress.sync_rate) as u64);
+                    let remaining = target_height
+                        .checked_sub(progress.current_height)
+                        .unwrap_or_else(|| {
+                            error!("Target height is less than current height, using 0");
+                            0
+                        });
+                    #[allow(clippy::float_arithmetic, reason = "ETA calculation is fine here")]
+                    let eta_calculation = remaining as f64 / progress.sync_rate;
+
+                    progress.eta_seconds = Some(
+                        #[allow(
+                            clippy::cast_possible_truncation,
+                            clippy::cast_sign_loss,
+                            reason = "ETA should be non-negative, checked"
+                        )]
+                        if eta_calculation >= 0.0 && eta_calculation <= u64::MAX as f64 {
+                            // Since we've already checked the bounds, this conversion is safe
+                            eta_calculation as u64
+                        } else {
+                            error!(
+                                "ETA calculation {} is out of bounds, using max value",
+                                eta_calculation
+                            );
+                            u64::MAX
+                        },
+                    );
                 }
             }
 
@@ -680,7 +739,8 @@ impl BlockSynchronizer {
                     .await
                 {
                     Ok(blocks_downloaded) => {
-                        total_blocks_downloaded += blocks_downloaded;
+                        total_blocks_downloaded =
+                            total_blocks_downloaded.saturating_add(blocks_downloaded);
                     }
                     Err(e) => {
                         if self.is_cancelled() {
@@ -696,11 +756,25 @@ impl BlockSynchronizer {
             // Update current tip
             if let Some(last_header) = headers.headers().last() {
                 current_tip_hash = last_header.block_hash();
-                current_tip_height += headers_count as u64;
+                let headers_count_u64 = u64::try_from(headers_count).unwrap_or_else(|_| {
+                    error!(
+                        "Failed to convert headers_count {} to u64, using max value",
+                        headers_count
+                    );
+                    u64::MAX
+                });
+
+                current_tip_height = match current_tip_height.checked_add(headers_count_u64) {
+                    Some(height) => height,
+                    None => {
+                        error!("Current tip height calculation would overflow, using max value");
+                        u64::MAX
+                    }
+                };
             }
 
             // Save state periodically
-            if total_headers_synced % 1000 == 0 {
+            if total_headers_synced.is_multiple_of(1000) {
                 self.save_state().await?;
             }
 
@@ -741,7 +815,13 @@ impl BlockSynchronizer {
             if let Some(hash) = self.get_block_hash_at_height(height).await {
                 locators.push(hash);
             }
-            step *= 2;
+            step = match step.checked_mul(2) {
+                Some(new_step) => new_step,
+                None => {
+                    error!("Step calculation would overflow, using max value");
+                    u64::MAX
+                }
+            };
         }
 
         // Always include genesis hash
@@ -767,7 +847,7 @@ impl BlockSynchronizer {
         }
 
         let mut interval = interval(Duration::from_secs(self.config.sync_interval));
-        let mut consecutive_failures = 0;
+        let mut consecutive_failures: i32 = 0;
 
         loop {
             // Check for shutdown at the beginning of each iteration
@@ -777,7 +857,14 @@ impl BlockSynchronizer {
             }
 
             // Use a timeout for the interval tick to prevent hanging
-            match tokio::time::timeout(Duration::from_secs(self.config.sync_interval + 5), async {
+            let timeout_seconds = match self.config.sync_interval.checked_add(5) {
+                Some(seconds) => seconds,
+                None => {
+                    error!("Timeout calculation would overflow, using max value");
+                    u64::MAX
+                }
+            };
+            match tokio::time::timeout(Duration::from_secs(timeout_seconds), async {
                 interval.tick().await;
             })
             .await
@@ -834,7 +921,7 @@ impl BlockSynchronizer {
                         continue;
                     }
                     warn!("Failed to check for new blocks: {}", e);
-                    consecutive_failures += 1;
+                    consecutive_failures = consecutive_failures.saturating_add(1);
 
                     if consecutive_failures >= 5 {
                         error!("Too many consecutive failures, stopping monitoring");
@@ -862,21 +949,41 @@ impl BlockSynchronizer {
                     }
 
                     let block_hash = header.block_hash();
-                    let block_height = current_tip_height + 1 + i as u64;
+                    let block_height = match current_tip_height.checked_add(1) {
+                        Some(height) => height,
+                        None => {
+                            error!("Current tip height + 1 would overflow, using max value");
+                            u64::MAX
+                        }
+                    };
+
+                    let block_height =
+                        match block_height.checked_add(u64::try_from(i).unwrap_or_else(|_| {
+                            error!("Failed to convert index {} to u64, using max value", i);
+                            u64::MAX
+                        })) {
+                            Some(height) => height,
+                            None => {
+                                error!("Block height calculation would overflow, using max value");
+                                u64::MAX
+                            }
+                        };
 
                     // Get consensus parameters to check for hard fork
-                    let params = self.get_consensus_params();
+                    let params = self.consensus_params();
                     let block_type = self.determine_block_type(block_height, &params);
 
                     // Log hard fork transitions
-                    if block_height == params.randomx_height as u64 {
+                    let randomx_height = params.randomx_height;
+                    if block_height == randomx_height {
                         warn!(
                             "=== RANDOMX HARD FORK ACTIVATION AT HEIGHT {} ===",
                             block_height
                         );
                         info!("Switching from SHA256D to RandomX proof-of-work");
                     }
-                    if block_height == params.randomx_enforcement_height as u64 {
+                    let randomx_enforcement_height = params.randomx_enforcement_height;
+                    if block_height == randomx_enforcement_height {
                         warn!(
                             "=== RANDOMX ENFORCEMENT BEGINS AT HEIGHT {} ===",
                             block_height
@@ -1028,7 +1135,13 @@ impl BlockSynchronizer {
                     last_error = Some(e);
 
                     if attempt < self.config.max_retries {
-                        let delay = Duration::from_secs(2u64.pow(attempt.min(5)));
+                        let delay = Duration::from_secs(match 2u32.checked_pow(attempt.min(5)) {
+                            Some(delay) => u64::from(delay),
+                            None => {
+                                error!("Delay calculation would overflow, using max value");
+                                u64::MAX
+                            }
+                        });
                         info!("Retrying in {} seconds...", delay.as_secs());
                         sleep(delay).await;
                     }
@@ -1096,7 +1209,7 @@ impl BlockSynchronizer {
 
         // Buffer to store all received blocks
         let mut all_buffered_blocks: HashMap<BlockHash, BufferedBlock<H>> = HashMap::new();
-        let mut total_blocks_downloaded = 0;
+        let mut total_blocks_downloaded: usize = 0;
         let download_start = Instant::now();
 
         // Process inventories in batches to handle peer limitations
@@ -1104,18 +1217,25 @@ impl BlockSynchronizer {
             .step_by(MAX_BLOCKS_PER_REQUEST)
             .enumerate()
         {
-            let batch_end =
-                std::cmp::min(batch_start + MAX_BLOCKS_PER_REQUEST, all_inventories.len());
-            let batch_inventories = all_inventories[batch_start..batch_end].to_vec();
-            let batch_block_hashes: Vec<BlockHash> =
-                all_block_hashes[batch_start..batch_end].to_vec();
+            let batch_end = match batch_start.checked_add(MAX_BLOCKS_PER_REQUEST) {
+                Some(end) => std::cmp::min(end, all_inventories.len()),
+                None => all_inventories.len(),
+            };
+            let batch_inventories = all_inventories
+                .get(batch_start..batch_end)
+                .unwrap_or(&[])
+                .to_vec();
+            let batch_block_hashes: Vec<BlockHash> = all_block_hashes
+                .get(batch_start..batch_end)
+                .unwrap_or(&[])
+                .to_vec();
 
             info!(
                 "PROCESSING BATCH {}/: Requesting {} blocks (indices {}-{})",
-                batch_index + 1,
+                batch_index.saturating_add(1),
                 batch_inventories.len(),
                 batch_start,
-                batch_end - 1
+                batch_end.saturating_sub(1)
             );
 
             // Send GetData request for this batch
@@ -1139,12 +1259,12 @@ impl BlockSynchronizer {
             // Merge batch results into overall collection
             for (hash, block) in batch_blocks {
                 all_buffered_blocks.insert(hash, block);
-                total_blocks_downloaded += 1;
+                total_blocks_downloaded = total_blocks_downloaded.saturating_add(1);
             }
 
             info!(
                 "BATCH {}/ COMPLETE: Received {} blocks (total so far: {})",
-                batch_index + 1,
+                batch_index.saturating_add(1),
                 batch_blocks_count,
                 total_blocks_downloaded
             );
@@ -1171,12 +1291,13 @@ impl BlockSynchronizer {
     }
 
     /// Collects blocks for a single batch request.
+    #[allow(clippy::too_many_arguments)]
     async fn collect_blocks_batch<H>(
         &self,
         connection: &ConnectionManager,
         stream: &mut TcpStream,
         batch_block_hashes: &[BlockHash],
-        header_map: &HashMap<BlockHash, &H>,
+        _header_map: &HashMap<BlockHash, &H>,
         timeout: Duration,
     ) -> Result<HashMap<BlockHash, BufferedBlock<H>>, ConnectionError>
     where
@@ -1237,7 +1358,7 @@ impl BlockSynchronizer {
                     if batch_block_hashes.contains(&block_hash)
                         && !buffered_blocks.contains_key(&block_hash)
                     {
-                        blocks_received += 1;
+                        blocks_received = blocks_received.saturating_add(1);
 
                         // Store the block in our buffer
                         let standard_block = StandardBlock {
@@ -1251,7 +1372,6 @@ impl BlockSynchronizer {
                                 block: standard_block,
                                 hash: block_hash,
                                 previous_hash: block.header().previous_block_hash(),
-                                processed: false,
                             },
                         );
 
@@ -1272,14 +1392,14 @@ impl BlockSynchronizer {
                         );
                     }
                 }
-                Message::Connection(Connection::Inv(inv)) => {
+                Message::Connection(Connection::Inv(_inv)) => {
                     debug!("Received inv message during batch download");
                     // Continue waiting for blocks
                     continue;
                 }
                 Message::Response(Response::NotFound(not_found)) => {
                     warn!("Peer doesn't have requested block(s): {:?}", not_found);
-                    blocks_received += 1; // Count as processed to avoid infinite loop
+                    blocks_received = blocks_received.saturating_add(1); // Count as processed to avoid infinite loop
                 }
                 _ => {
                     debug!(
@@ -1301,7 +1421,7 @@ impl BlockSynchronizer {
         Ok(buffered_blocks)
     }
 
-    /// Processes buffered blocks (combines phases 2 and 3 from original implementation).
+    /// Processes buffered blocks
     async fn process_buffered_blocks<H>(
         &self,
         mut buffered_blocks: HashMap<BlockHash, BufferedBlock<H>>,
@@ -1318,7 +1438,7 @@ impl BlockSynchronizer {
             "Phase 2: Topologically sorting {} blocks",
             buffered_blocks.len()
         );
-        let genesis_hash = self.get_genesis_hash();
+        let genesis_hash = self.genesis_hash();
         let mut sorted_blocks: Vec<BufferedBlock<H>> = Vec::new();
         let mut processed_hashes: HashSet<BlockHash> = HashSet::new();
 
@@ -1329,11 +1449,17 @@ impl BlockSynchronizer {
         // Sort blocks topologically
         let mut remaining_blocks = buffered_blocks.len();
         let mut iterations = 0;
-        let max_iterations = buffered_blocks.len() * 2; // Prevent infinite loops
+        let max_iterations = match buffered_blocks.len().checked_mul(2) {
+            Some(max) => max,
+            None => {
+                error!("Max iterations calculation would overflow, using max value");
+                usize::MAX
+            }
+        }; // Prevent infinite loops
 
         while remaining_blocks > 0 && iterations < max_iterations {
-            iterations += 1;
-            let mut blocks_added_this_iteration = 0;
+            iterations = iterations.saturating_add(1);
+            let mut blocks_added_this_iteration: usize = 0;
 
             // Find blocks whose previous hash is already processed
             let mut blocks_to_process: Vec<BufferedBlock<H>> = Vec::new();
@@ -1345,7 +1471,8 @@ impl BlockSynchronizer {
                     continue;
                 }
 
-                // If this is the genesis block or its previous hash is processed, we can process it
+                // If this is the genesis block or its previous hash is processed, we can
+                // process it
                 if block.previous_hash == BlockHash::all_zeros() || // Genesis block
                    block.previous_hash == genesis_hash || // Network genesis block
                    processed_hashes.contains(&block.previous_hash)
@@ -1359,19 +1486,21 @@ impl BlockSynchronizer {
             for block in blocks_to_process {
                 sorted_blocks.push(block.clone());
                 processed_hashes.insert(block.hash);
-                blocks_added_this_iteration += 1;
+                blocks_added_this_iteration = blocks_added_this_iteration.saturating_add(1);
             }
 
             // Remove processed blocks from the buffer
             for hash in blocks_to_remove {
                 buffered_blocks.remove(&hash);
-                remaining_blocks -= 1;
+                remaining_blocks = remaining_blocks.saturating_sub(1);
             }
 
-            // If we didn't add any blocks this iteration, we might have a cycle or missing blocks
+            // If we didn't add any blocks this iteration, we might have a cycle or missing
+            // blocks
             if blocks_added_this_iteration == 0 {
                 warn!(
-                    "No blocks could be processed in this iteration, possible cycle or missing blocks"
+                    "No blocks could be processed in this iteration, possible cycle or missing \
+                     blocks"
                 );
 
                 // For debugging, let's log the remaining blocks
@@ -1379,7 +1508,8 @@ impl BlockSynchronizer {
                     warn!("Remaining block: {} (prev: {})", hash, block.previous_hash);
                 }
 
-                // As a last resort, we'll try to process any block that builds on our current tip
+                // As a last resort, we'll try to process any block that builds on our current
+                // tip
                 let (current_tip_hash, _) = self.get_chain_tip().await;
                 let mut found_block = false;
                 for (hash, block) in buffered_blocks.iter() {
@@ -1387,8 +1517,9 @@ impl BlockSynchronizer {
                         warn!("Processing block that builds on current tip: {}", hash);
                         sorted_blocks.push(block.clone());
                         processed_hashes.insert(*hash);
-                        // buffered_blocks.remove(hash); // Safe to remove here since we're iterating
-                        remaining_blocks -= 1;
+                        // buffered_blocks.remove(hash); // Safe to remove here since we're
+                        // iterating
+                        remaining_blocks = remaining_blocks.saturating_sub(1);
                         found_block = true;
                         break;
                     }
@@ -1418,7 +1549,7 @@ impl BlockSynchronizer {
             "Phase 3: Processing {} blocks in order",
             sorted_blocks.len()
         );
-        let mut blocks_processed = 0;
+        let mut blocks_processed: usize = 0;
 
         for (i, buffered_block) in sorted_blocks.iter().enumerate() {
             // Check for shutdown
@@ -1452,11 +1583,11 @@ impl BlockSynchronizer {
                     info!(
                         "Successfully processed block: {} ({}/{})",
                         buffered_block.hash,
-                        i + 1,
+                        i.saturating_add(1),
                         sorted_blocks.len()
                     );
 
-                    blocks_processed += 1;
+                    blocks_processed = blocks_processed.saturating_add(1);
                 }
                 Err(e) => {
                     error!("Failed to process block {}: {}", buffered_block.hash, e);
@@ -1519,12 +1650,18 @@ impl BlockSynchronizer {
 
         // Get the expected block height
         let expected_height = match self.get_block_height(&header.previous_block_hash()).await {
-            Some(height) => height + 1,
+            Some(height) => match height.checked_add(1) {
+                Some(new_height) => new_height,
+                None => {
+                    error!("Height calculation would overflow, using max value");
+                    u64::MAX
+                }
+            },
             None => {
                 // This might be the genesis block, or we don't have the parent
                 if header.previous_block_hash() == BlockHash::all_zeros() {
                     0 // Genesis block
-                } else if header.previous_block_hash() == self.get_genesis_hash() {
+                } else if header.previous_block_hash() == self.genesis_hash() {
                     1 // First block after genesis
                 } else {
                     return Err(ConnectionError::InvalidMessage(format!(
@@ -1536,7 +1673,7 @@ impl BlockSynchronizer {
         };
 
         // Get consensus parameters to determine validation rules
-        let params = self.get_consensus_params();
+        let params = self.consensus_params();
         let block_type = self.determine_block_type(expected_height, &params);
 
         // Log block type information
@@ -1546,21 +1683,23 @@ impl BlockSynchronizer {
         );
 
         // Check for hard fork transitions
-        if expected_height == params.randomx_height as u64 {
+        let randomx_height = params.randomx_height;
+        if expected_height == randomx_height {
             warn!("RandomX hard fork activation at height {}", expected_height);
         }
-        if expected_height == params.randomx_enforcement_height as u64 {
+        let randomx_enforcement_height = params.randomx_enforcement_height;
+        if expected_height == randomx_enforcement_height {
             warn!("RandomX enforcement begins at height {}", expected_height);
         }
 
         // Check if we already have this block at a different height (reorg)
-        if let Some(existing_height) = self.get_block_height(&block_hash).await {
-            if existing_height != expected_height {
-                return Err(ConnectionError::InvalidMessage(format!(
-                    "Block {} exists at height {} but expected at height {}",
-                    block_hash, existing_height, expected_height
-                )));
-            }
+        if let Some(existing_height) = self.get_block_height(&block_hash).await
+            && existing_height != expected_height
+        {
+            return Err(ConnectionError::InvalidMessage(format!(
+                "Block {} exists at height {} but expected at height {}",
+                block_hash, existing_height, expected_height
+            )));
         }
 
         // Validate proof of work with appropriate rules
@@ -1580,7 +1719,16 @@ impl BlockSynchronizer {
             .unwrap_or_default()
             .as_secs();
 
-        if u64::from(header.timestamp()) > current_time + 2 * 3600 {
+        let header_timestamp = u64::from(header.timestamp());
+        let future_limit = match current_time.checked_add(2 * 3600) {
+            Some(limit) => limit,
+            None => {
+                error!("Future time calculation would overflow, using max value");
+                u64::MAX
+            }
+        };
+
+        if header_timestamp > future_limit {
             // Allow 2 hours in the future
             return Err(ConnectionError::InvalidMessage(format!(
                 "Block timestamp {} is too far in the future",
@@ -1627,17 +1775,19 @@ impl BlockSynchronizer {
     where
         H: Header + Send + Sync + 'static,
     {
-        let params = self.get_consensus_params();
+        let params = self.consensus_params();
 
         // For blocks before RandomX activation, use standard validation
-        if height < params.randomx_height as u64 {
+        let randomx_height = params.randomx_height;
+        if height < randomx_height {
             return self.validate_pow::<H>(header).await;
         }
 
         // For blocks at or after RandomX activation
-        if height >= params.randomx_height as u64 {
+        if height >= randomx_height {
             // If RandomX is enforced, reject any non-RandomX blocks
-            if height >= params.randomx_enforcement_height as u64 {
+            let randomx_enforcement_height = params.randomx_enforcement_height;
+            if height >= randomx_enforcement_height {
                 // Check if this is a RandomX block by looking at the header size
                 // RandomX headers are 112 bytes vs 80 bytes for Bitcoin headers
                 if H::SIZE == 112 {
@@ -1723,7 +1873,13 @@ impl BlockSynchronizer {
                     && hash_at_height == fork_hash
                 {
                     // Found common ancestor
-                    let reorg_depth = current_tip_height - fork_height;
+                    let reorg_depth = match current_tip_height.checked_sub(fork_height) {
+                        Some(depth) => depth,
+                        None => {
+                            error!("Reorg depth calculation would underflow, using 0");
+                            0
+                        }
+                    };
                     if reorg_depth > 0 {
                         return Ok(Some(ReorgInfo {
                             common_ancestor_height: fork_height,
@@ -1731,16 +1887,34 @@ impl BlockSynchronizer {
                             old_tip_hash: current_tip_hash,
                             old_tip_height: current_tip_height,
                             new_tip_hash: header.block_hash(),
-                            new_tip_height: prev_height + 1,
+                            new_tip_height: match prev_height.checked_add(1) {
+                                Some(new_height) => new_height,
+                                None => {
+                                    error!(
+                                        "New tip height calculation would overflow, using max \
+                                         value"
+                                    );
+                                    u64::MAX
+                                }
+                            },
                             reorg_depth,
                         }));
                     }
                 }
 
                 // Move to previous block
-                if let Some(prev_header) = self.get_header_at_height::<H>(fork_height - 1).await {
+                if let Some(prev_header) = self
+                    .get_header_at_height::<H>(fork_height.saturating_sub(1))
+                    .await
+                {
                     fork_hash = prev_header.previous_block_hash();
-                    fork_height -= 1;
+                    fork_height = match fork_height.checked_sub(1) {
+                        Some(new_height) => new_height,
+                        None => {
+                            error!("Fork height calculation would underflow, using 0");
+                            0
+                        }
+                    };
                 } else {
                     break;
                 }
@@ -1795,14 +1969,12 @@ impl BlockSynchronizer {
 
     /// Gets the current synchronization progress.
     pub async fn get_progress(&self) -> SyncProgress {
-        self.progress.read().await.clone()
+        *self.progress.read().await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use super::*;
     use crate::alpha::blockdata::block::header::{bitcoin::BitcoinHeader, randomx::RandomXHeader};
 
@@ -1810,7 +1982,7 @@ mod tests {
     fn test_sync_config_default() {
         let config = SyncConfig::default();
         assert_eq!(config.max_headers_per_request, 2000);
-        assert_eq!(config.max_blocks_to_download, 1000);
+        assert_eq!(config.max_blocks_to_download, usize::MAX);
         assert!(config.download_full_blocks);
     }
 
@@ -1885,47 +2057,29 @@ mod tests {
     }
 
     #[test]
-    fn test_should_use_randomx() {
-        let config = SyncConfig::default();
-        let synchronizer = BlockSynchronizer::new(config);
-
-        // Test with mainnet parameters
-        let params = Params::MAINNET;
-
-        // Before RandomX activation
-        assert!(!synchronizer.should_use_randomx(50000, &params));
-
-        // At RandomX activation
-        assert!(synchronizer.should_use_randomx(70228, &params));
-
-        // After RandomX activation
-        assert!(synchronizer.should_use_randomx(100000, &params));
-    }
-
-    #[test]
     fn test_get_consensus_params() {
-        // Test default (mainnet)
+        // Test default (testnet)
         let config = SyncConfig::default();
         let synchronizer = BlockSynchronizer::new(config);
-        let params = synchronizer.get_consensus_params();
-        assert_eq!(params.network, crate::alpha::network::Network::Mainnet);
-
-        // Test with testnet data directory
-        let config = SyncConfig {
-            data_dir: Some(PathBuf::from("/testnet")),
-            ..Default::default()
-        };
-        let synchronizer = BlockSynchronizer::new(config);
-        let params = synchronizer.get_consensus_params();
+        let params = synchronizer.consensus_params();
         assert_eq!(params.network, crate::alpha::network::Network::Testnet);
 
-        // Test with regtest data directory
+        // Test with mainnet network
         let config = SyncConfig {
-            data_dir: Some(PathBuf::from("/regtest")),
+            network: crate::alpha::network::Network::Mainnet,
             ..Default::default()
         };
         let synchronizer = BlockSynchronizer::new(config);
-        let params = synchronizer.get_consensus_params();
+        let params = synchronizer.consensus_params();
+        assert_eq!(params.network, crate::alpha::network::Network::Mainnet);
+
+        // Test with regtest network
+        let config = SyncConfig {
+            network: crate::alpha::network::Network::Regtest,
+            ..Default::default()
+        };
+        let synchronizer = BlockSynchronizer::new(config);
+        let params = synchronizer.consensus_params();
         assert_eq!(params.network, crate::alpha::network::Network::Regtest);
     }
 

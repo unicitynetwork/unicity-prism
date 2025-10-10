@@ -7,7 +7,7 @@ use std::{net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc};
 
 use clap::Parser;
 use directories::ProjectDirs;
-use tokio::{io::AsyncWriteExt, sync::RwLock};
+use tokio::io::AsyncWriteExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -136,11 +136,8 @@ fn parse_peer_addresses(
 
 /// Gets the default application data directory based on the platform.
 fn get_default_data_dir() -> Option<PathBuf> {
-    if let Some(proj_dirs) = ProjectDirs::from("org", "unicitylabs", "prism") {
-        Some(proj_dirs.data_dir().to_path_buf())
-    } else {
-        None
-    }
+    ProjectDirs::from("org", "unicitylabs", "prism")
+        .map(|proj_dirs| proj_dirs.data_dir().to_path_buf())
 }
 
 /// Gets default peer addresses for the specified network.
@@ -339,6 +336,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create block synchronizer with database
     let sync_config = SyncConfig {
+        network,
         max_headers_per_request: 2000,
         max_blocks_to_download: if args.max_blocks == 1000 {
             usize::MAX
@@ -403,10 +401,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(unix)]
         {
             use tokio::signal::unix::{SignalKind, signal};
-            let mut sigterm = signal(SignalKind::terminate()).unwrap();
-            sigterm.recv().await;
-            warn!("Received SIGTERM, initiating shutdown...");
-            term_token.cancel();
+            match signal(SignalKind::terminate()) {
+                Ok(mut sigterm) => {
+                    sigterm.recv().await;
+                    warn!("Received SIGTERM, initiating shutdown...");
+                    term_token.cancel();
+                }
+                Err(e) => {
+                    error!("Failed to setup SIGTERM handler: {}", e);
+                }
+            }
         }
         #[cfg(not(unix))]
         {

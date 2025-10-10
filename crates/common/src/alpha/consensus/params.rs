@@ -17,16 +17,16 @@ pub struct Params {
     /// Network for which these parameters are defined.
     pub network: Network,
     /// The block height which BIP34 becomes active.
-    pub bip34_height: u32,
+    pub bip34_height: u64,
     /// The block height which BIP65 becomes active.
-    pub bip65_height: u32,
+    pub bip65_height: u64,
     /// The block height which BIP66 becomes active.
-    pub bip66_height: u32,
+    pub bip66_height: u64,
     /// The block height which RandomX becomes active.
-    pub randomx_height: u32,
+    pub randomx_height: u64,
     /// The block height which RandomX becomes enforced (non-RandomX blocks are
     /// rejected).
-    pub randomx_enforcement_height: u32,
+    pub randomx_enforcement_height: u64,
     /// The multiplier for RandomX difficulty adjustment when SHA256D switches
     /// to RandomX.
     pub randomx_difficulty_multiplier: u32,

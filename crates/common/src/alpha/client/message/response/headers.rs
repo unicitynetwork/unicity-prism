@@ -21,12 +21,13 @@
 //!
 //! TODO: Add examples when the library is more mature.
 
+use tracing::debug;
+
 use crate::alpha::{
     blockdata::block::Header,
     consensus::{Decodable, Encodable},
     io::Read,
 };
-use tracing::debug;
 
 /// Represents a headers response message in the P2P protocol.
 ///
@@ -96,6 +97,9 @@ impl<H: Header> Encodable for Headers<H> {
         // Encode each header
         for header in &self.headers {
             len += header.consensus_encode(writer)?;
+            // Write the transaction count byte (always 0 for headers messages)
+            writer.write_all(&[0u8])?;
+            len += 1;
         }
         Ok(len)
     }
@@ -148,9 +152,9 @@ impl<H: Header> Decodable for Headers<H> {
 #[cfg(test)]
 mod tests {
     use bitcoin::{
-        block::{Header as InnerBitcoinHeader, Version}, consensus::{Decodable, Encodable}, BlockHash,
-        CompactTarget,
-        TxMerkleNode,
+        BlockHash, CompactTarget, TxMerkleNode,
+        block::{Header as InnerBitcoinHeader, Version},
+        consensus::{Decodable, Encodable},
     };
 
     use super::*;

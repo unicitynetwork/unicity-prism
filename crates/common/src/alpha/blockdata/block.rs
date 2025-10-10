@@ -1,4 +1,4 @@
-mod header;
+pub(crate) mod header;
 
 pub use bitcoin::block::{BlockHash, ValidationError, WitnessMerkleNode};
 pub use header::{BitcoinHeader, Header, RandomXHeader};

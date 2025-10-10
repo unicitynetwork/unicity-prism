@@ -51,6 +51,11 @@ pub trait Header:
     /// * `None` - If the header doesn't have a valid target
     fn target(&self) -> Option<Target>;
 
+    /// Retrieves the timestamp from the header.
+    ///
+    /// # Returns
+    ///
+    /// * `u32` - The block timestamp as a Unix epoch time
     fn timestamp(&self) -> u32;
 
     /// Validates the proof of work against the required target.

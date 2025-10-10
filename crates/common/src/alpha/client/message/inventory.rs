@@ -47,7 +47,7 @@ use crate::alpha::{
 
 /// A list of inventory items for consensus encoding
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct InventoryList(pub Vec<Inventory>);
+pub struct InventoryList(pub Vec<Inventory>);
 
 #[allow(dead_code)]
 impl InventoryList {

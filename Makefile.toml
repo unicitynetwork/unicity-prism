@@ -100,7 +100,7 @@ dependencies = [
     "format-check",
     "check",
     "clippy",
-    "nextest",
+    "test",
     "deny"
 ]
 

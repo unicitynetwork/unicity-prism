@@ -17,7 +17,7 @@ use redb::{
 use serde::{Deserialize, Serialize};
 use serde_json;
 use thiserror::Error;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::alpha::{
     blockdata::block::{BlockHash, Header},
@@ -28,24 +28,76 @@ use crate::alpha::{
 };
 
 /// Database error types.
+///
+/// This enum represents all possible errors that can occur during database
+/// operations in the blockchain storage layer. It wraps various underlying
+/// error types and provides domain-specific errors for blockchain operations.
 #[derive(Debug, Error)]
 pub enum DatabaseError {
+    /// Error from the underlying redb database engine.
+    ///
+    /// This variant wraps errors that originate from the redb key-value store,
+    /// such as corruption, permission issues, or other database-level problems.
     #[error("Database error: {0}")]
     Redb(#[from] RedbError),
+
+    /// Error during database transaction operations.
+    ///
+    /// This occurs when a transaction cannot be started, completed, or rolled
+    /// back due to conflicts, timeouts, or other transaction-related
+    /// issues.
     #[error("Transaction error: {0}")]
     Transaction(#[from] TransactionError),
+
+    /// Error when committing a transaction to the database.
+    ///
+    /// This occurs specifically during the commit phase of a transaction when
+    /// changes cannot be durably persisted to storage.
     #[error("Commit error: {0}")]
     CommitError(#[from] CommitError),
+
+    /// Error related to storage operations.
+    ///
+    /// This includes issues with the underlying storage medium, such as disk
+    /// full errors, I/O failures at the storage layer, or corruption.
     #[error("Storage error: {0}")]
     Storage(#[from] StorageError),
+
+    /// Error when accessing or manipulating database tables.
+    ///
+    /// This occurs when table operations fail, such as when a table doesn't
+    /// exist, schema mismatches, or table-specific constraints are
+    /// violated.
     #[error("Table error: {0}")]
     Table(#[from] TableError),
+
+    /// Error during encoding or decoding of blockchain data.
+    ///
+    /// This occurs when serializing data for storage or deserializing data from
+    /// storage fails due to format issues, version mismatches, or
+    /// corruption.
     #[error("Encoding error: {0}")]
     Encoding(#[from] EncodeDecodeError),
+
+    /// Error during I/O operations.
+    ///
+    /// This wraps standard I/O errors that may occur during file operations,
+    /// such as reading from or writing to the database files.
     #[error("IO error: {0}")]
     Io(#[from] IoError),
+
+    /// Error when a requested block is not found in the database.
+    ///
+    /// This is a domain-specific error that occurs when attempting to retrieve
+    /// a block by its hash, but the block does not exist in the database.
     #[error("Block not found: {0}")]
     BlockNotFound(BlockHash),
+
+    /// Error indicating an invalid or inconsistent database state.
+    ///
+    /// This is a general-purpose error for when the database contents don't
+    /// match expected invariants, such as corrupted chain state or
+    /// inconsistent mappings.
     #[error("Invalid database state: {0}")]
     InvalidState(String),
 }
@@ -63,6 +115,21 @@ impl From<serde_json::Error> for DatabaseError {
 }
 
 /// Result type for database operations.
+///
+/// This type alias is used throughout the database module to simplify error
+/// handling. It represents the result of a database operation that can either
+/// succeed with a value of type T or fail with a [`DatabaseError`].
+///
+/// # Examples
+///
+/// ```rust
+/// use crate::alpha::client::database::{DatabaseResult, DatabaseError};
+///
+/// fn get_block_height() -> DatabaseResult<u64> {
+///     // Implementation that returns either a height or a DatabaseError
+///     Ok(100)
+/// }
+/// ```
 pub type DatabaseResult<T> = Result<T, DatabaseError>;
 
 /// Table definitions for the database.
@@ -458,25 +525,10 @@ pub struct DatabaseStats {
 
 #[cfg(test)]
 mod tests {
-    use bitcoin::{BlockHash, TxMerkleNode, block::Version, pow::CompactTarget};
+    use bitcoin::BlockHash;
     use tempfile::TempDir;
 
     use super::*;
-    use crate::alpha::blockdata::block::BitcoinHeader;
-
-    fn create_test_header() -> BitcoinHeader {
-        use bitcoin::blockdata::block::Header as InnerBitcoinHeader;
-
-        InnerBitcoinHeader {
-            version: Version::ONE,
-            prev_blockhash: BlockHash::all_zeros(),
-            merkle_root: TxMerkleNode::all_zeros(),
-            time: 0,
-            bits: CompactTarget::from_consensus(0x1d00ffff),
-            nonce: 1,
-        }
-        .into()
-    }
 
     #[tokio::test]
     async fn test_database_creation() {

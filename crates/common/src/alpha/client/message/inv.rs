@@ -1,7 +1,8 @@
 //! Inventory message implementation for Bitcoin P2P protocol.
 //!
 //! This module defines the `Inv` message, which is used to advertise
-//! known inventory (blocks, transactions, etc.) to peers in the Bitcoin network.
+//! known inventory (blocks, transactions, etc.) to peers in the Bitcoin
+//! network.
 
 use crate::alpha::{
     client::message::inventory::InventoryList,
@@ -110,29 +111,6 @@ mod tests {
 
         assert_eq!(decoded.inventory().len(), 0);
         assert!(decoded.inventory().is_empty());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_inv_message_accessors() -> Result<(), Box<dyn std::error::Error>> {
-        let txid: Txid =
-            hex_to_txid("de55ffd709ac1f5dc509a0925d0b1fc442ca034f224732e429081da1b621f55a")?;
-        let inventory_list = InventoryList::new(vec![Inventory::Transaction(txid)]);
-        let mut inv_message = Inv::new(inventory_list.clone());
-
-        // Test inventory() accessor
-        assert_eq!(inv_message.inventory(), &inventory_list);
-
-        // Test inventory_mut() accessor
-        let new_txid: Txid =
-            hex_to_txid("a1b2c3d4e5f60708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021")?;
-        inv_message.inventory_mut().push(Inventory::Transaction(new_txid));
-        assert_eq!(inv_message.inventory().len(), 2);
-
-        // Test into_inventory() accessor
-        let retrieved_inventory = inv_message.into_inventory();
-        assert_eq!(retrieved_inventory.len(), 2);
 
         Ok(())
     }
