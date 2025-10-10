@@ -24,7 +24,9 @@
 use crate::alpha::{
     blockdata::block::Header,
     consensus::{Decodable, Encodable},
+    io::Read,
 };
+use tracing::debug;
 
 /// Represents a headers response message in the P2P protocol.
 ///
@@ -104,7 +106,7 @@ impl<H: Header> Encodable for Headers<H> {
     reason = "Cast is fine here as it can't fail"
 )]
 impl<H: Header> Decodable for Headers<H> {
-    fn consensus_decode<R: crate::alpha::io::Read + ?Sized>(
+    fn consensus_decode<R: Read + ?Sized>(
         reader: &mut R,
     ) -> Result<Self, crate::alpha::consensus::EncodeDecodeError> {
         // Decode the number of headers as a VarInt
@@ -123,6 +125,20 @@ impl<H: Header> Decodable for Headers<H> {
         // Decode each header
         for _ in 0..len {
             headers.push(Decodable::consensus_decode(reader)?);
+
+            // Read and discard the transaction count byte (always 0)
+            let mut tx_count_byte = [0u8; 1];
+            reader
+                .read_exact(&mut tx_count_byte)
+                .map_err(crate::alpha::consensus::EncodeDecodeError::Io)?;
+
+            // Verify that the transaction count is 0 as expected
+            if tx_count_byte[0] != 0 {
+                debug!(
+                    "Warning: Transaction count byte was not 0, got: {}",
+                    tx_count_byte[0]
+                );
+            }
         }
 
         Ok(Headers { headers })
@@ -132,9 +148,9 @@ impl<H: Header> Decodable for Headers<H> {
 #[cfg(test)]
 mod tests {
     use bitcoin::{
-        BlockHash, CompactTarget, TxMerkleNode,
-        block::{Header as InnerBitcoinHeader, Version},
-        consensus::{Decodable, Encodable},
+        block::{Header as InnerBitcoinHeader, Version}, consensus::{Decodable, Encodable}, BlockHash,
+        CompactTarget,
+        TxMerkleNode,
     };
 
     use super::*;
