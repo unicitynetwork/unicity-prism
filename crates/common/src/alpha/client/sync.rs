@@ -5,7 +5,7 @@
 //! full blocks using GetData messages.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -24,7 +24,10 @@ use tracing::{debug, error, info, warn};
 
 use crate::alpha::client::Connection;
 use crate::alpha::{
-    blockdata::block::{BlockHash, Header},
+    blockdata::{
+        block::{BlockHash, Header},
+        genesis::GenesisInfo,
+    },
     client::{
         connection::{ConnectionError, ConnectionManager},
         database::{BlockDatabase, DatabaseError},
@@ -37,6 +40,7 @@ use crate::alpha::{
     },
     consensus::Params,
     hashes::Hash,
+    network::Network,
 };
 
 /// Persistent storage for blockchain state.
@@ -143,6 +147,19 @@ pub struct ReorgInfo {
     pub reorg_depth: u64,
 }
 
+/// A buffered block waiting to be processed.
+#[derive(Debug, Clone)]
+struct BufferedBlock<H: Header> {
+    /// The block data
+    block: StandardBlock<H>,
+    /// The block hash
+    hash: BlockHash,
+    /// The previous block hash
+    previous_hash: BlockHash,
+    /// Whether this block has been processed
+    processed: bool,
+}
+
 /// Handles blockchain synchronization with peers.
 #[derive(Debug, Clone)]
 pub struct BlockSynchronizer {
@@ -213,6 +230,16 @@ impl BlockSynchronizer {
             // Default to mainnet if no data directory is configured
             Params::MAINNET
         }
+    }
+
+    /// Gets the network type for this synchronizer.
+    fn get_network(&self) -> Network {
+        self.get_consensus_params().network
+    }
+
+    /// Gets the genesis block hash for the current network.
+    fn get_genesis_hash(&self) -> BlockHash {
+        GenesisInfo::for_network(self.get_network()).hash
     }
 
     /// Creates a new block synchronizer with a database.
@@ -1034,6 +1061,7 @@ impl BlockSynchronizer {
         // Create inventory vectors for block requests
         let mut inventories = Vec::new();
         let mut block_hashes = Vec::new();
+        let mut header_map = HashMap::new();
 
         for header in headers {
             let block_hash = header.block_hash();
@@ -1049,12 +1077,7 @@ impl BlockSynchronizer {
 
             inventories.push(Inventory::Block(block_hash));
             block_hashes.push(block_hash);
-
-            // Mark as known to avoid duplicate requests
-            {
-                let mut known_hashes = self.known_block_hashes.write().await;
-                known_hashes.insert(block_hash);
-            }
+            header_map.insert(block_hash, header);
         }
 
         if inventories.is_empty() {
@@ -1068,7 +1091,8 @@ impl BlockSynchronizer {
             .send_message(stream, Message::<H>::Request(Request::GetData(get_data)))
             .await?;
 
-        // Wait for block responses with improved timeout handling
+        // Buffer to store received blocks
+        let mut buffered_blocks: HashMap<BlockHash, BufferedBlock<H>> = HashMap::new();
         let mut blocks_received: i32 = 0;
         let expected_blocks = block_hashes.len();
 
@@ -1095,6 +1119,8 @@ impl BlockSynchronizer {
         let mut last_block_received = Instant::now();
         let watchdog_timeout = Duration::from_secs(60); // 1 minute without progress
 
+        // Phase 1: Collect all blocks
+        info!("Phase 1: Collecting {} blocks", expected_blocks);
         loop {
             // Check for overall timeout
             if download_start.elapsed() > overall_timeout {
@@ -1171,72 +1197,28 @@ impl BlockSynchronizer {
                     if block_hashes.contains(&block_hash) {
                         blocks_received = blocks_received.saturating_add(1);
 
-                        // Update progress
-                        {
-                            let mut progress = self.progress.write().await;
-                            progress.blocks_downloaded =
-                                progress.blocks_downloaded.saturating_add(1);
-                        }
+                        // Store the block in our buffer
+                        let standard_block = StandardBlock {
+                            header: block.header,
+                            transactions: block.transactions.clone(),
+                        };
 
-                        // Log block information
-                        info!(
-                            "Received block: {} (height: {})",
+                        buffered_blocks.insert(
                             block_hash,
-                            self.get_block_height(&block_hash).await.unwrap_or(u64::MAX)
+                            BufferedBlock {
+                                block: standard_block,
+                                hash: block_hash,
+                                previous_hash: block.header().previous_block_hash(),
+                                processed: false,
+                            },
                         );
 
-                        // Check for shutdown before database operations
-                        if self.is_cancelled() {
-                            info!(
-                                "Cancellation detected before database operations, stopping \
-                                 download"
-                            );
-                            break;
-                        }
+                        debug!("Buffered block {}", block_hash);
 
-                        // Store the block in database
-                        if let Some(database) = &self.database {
-                            let standard_block = StandardBlock {
-                                header: block.header,
-                                transactions: block.transactions.clone(),
-                            };
-
-                            if let Err(e) = database.store_block(&standard_block).await {
-                                error!("Failed to store block in database: {}", e);
-                                // Continue processing even if storage fails
-                            }
-
-                            // Store the header as well for efficient lookup
-                            if let Err(e) = database.store_header(&block.header).await {
-                                error!("Failed to store header in database: {}", e);
-                            }
-                        }
-
-                        // Check for shutdown before processing
-                        if self.is_cancelled() {
-                            info!(
-                                "Cancellation detected before block processing, stopping download"
-                            );
-                            break;
-                        }
-
-                        // Process block transactions
-                        if let Err(e) = self
-                            .process_block(StandardBlock {
-                                header: block.header,
-                                transactions: block.transactions,
-                            })
-                            .await
+                        // Mark as known to avoid duplicate requests
                         {
-                            if self.is_cancelled() {
-                                info!(
-                                    "Cancellation detected during block processing, stopping \
-                                     download"
-                                );
-                                break;
-                            }
-                            error!("Failed to process block {}: {}", block_hash, e);
-                            // Continue with other blocks even if one fails
+                            let mut known_hashes = self.known_block_hashes.write().await;
+                            known_hashes.insert(block_hash);
                         }
                     } else {
                         warn!("Received unexpected block: {}", block_hash);
@@ -1285,11 +1267,168 @@ impl BlockSynchronizer {
         }
 
         info!(
-            "COMPLETED BLOCK DOWNLOAD: Received {} out of {} requested blocks",
-            blocks_received, expected_blocks
+            "Phase 1 complete: Buffered {} blocks out of {} requested",
+            buffered_blocks.len(),
+            expected_blocks
         );
-        debug!("Downloaded {} blocks", blocks_received);
-        Ok(blocks_received as usize)
+
+        // Phase 2: Topologically sort blocks by previous hash
+        info!(
+            "Phase 2: Topologically sorting {} blocks",
+            buffered_blocks.len()
+        );
+        let genesis_hash = self.get_genesis_hash();
+        let mut sorted_blocks: Vec<BufferedBlock<H>> = Vec::new();
+        let mut processed_hashes: HashSet<BlockHash> = HashSet::new();
+
+        // Get the current chain tip to start from
+        let (current_tip_hash, _) = self.get_chain_tip().await;
+        processed_hashes.insert(current_tip_hash);
+
+        // Sort blocks topologically
+        let mut remaining_blocks = buffered_blocks.len();
+        let mut iterations = 0;
+        let max_iterations = buffered_blocks.len() * 2; // Prevent infinite loops
+
+        while remaining_blocks > 0 && iterations < max_iterations {
+            iterations += 1;
+            let mut blocks_added_this_iteration = 0;
+
+            // Find blocks whose previous hash is already processed
+            let mut blocks_to_process: Vec<BufferedBlock<H>> = Vec::new();
+            let mut blocks_to_remove: Vec<BlockHash> = Vec::new();
+
+            for (hash, block) in buffered_blocks.iter() {
+                if processed_hashes.contains(hash) {
+                    blocks_to_remove.push(*hash);
+                    continue;
+                }
+
+                // If this is the genesis block or its previous hash is processed, we can process it
+                if block.previous_hash == BlockHash::all_zeros() || // Genesis block
+                   block.previous_hash == genesis_hash || // Network genesis block
+                   processed_hashes.contains(&block.previous_hash)
+                {
+                    blocks_to_process.push(block.clone());
+                    blocks_to_remove.push(*hash);
+                }
+            }
+
+            // Add blocks to the sorted list
+            for block in blocks_to_process {
+                sorted_blocks.push(block.clone());
+                processed_hashes.insert(block.hash);
+                blocks_added_this_iteration += 1;
+            }
+
+            // Remove processed blocks from the buffer
+            for hash in blocks_to_remove {
+                buffered_blocks.remove(&hash);
+                remaining_blocks -= 1;
+            }
+
+            // If we didn't add any blocks this iteration, we might have a cycle or missing blocks
+            if blocks_added_this_iteration == 0 {
+                warn!(
+                    "No blocks could be processed in this iteration, possible cycle or missing blocks"
+                );
+
+                // For debugging, let's log the remaining blocks
+                for (hash, block) in buffered_blocks.iter() {
+                    warn!("Remaining block: {} (prev: {})", hash, block.previous_hash);
+                }
+
+                // As a last resort, we'll try to process any block that builds on our current tip
+                let mut found_block = false;
+                for (hash, block) in buffered_blocks.iter() {
+                    if block.previous_hash == current_tip_hash {
+                        warn!("Processing block that builds on current tip: {}", hash);
+                        sorted_blocks.push(block.clone());
+                        processed_hashes.insert(*hash);
+                        // buffered_blocks.remove(hash); // TOOD fix
+                        remaining_blocks -= 1;
+                        found_block = true;
+                        break;
+                    }
+                }
+
+                if !found_block {
+                    // If we still can't find a block to process, break to avoid infinite loop
+                    error!("Cannot find any block to process, breaking to avoid infinite loop");
+                    break;
+                }
+            }
+        }
+
+        if iterations >= max_iterations {
+            error!(
+                "Reached maximum iterations during topological sort, possible cycle in block graph"
+            );
+        }
+
+        info!(
+            "Phase 2 complete: Topologically sorted {} blocks",
+            sorted_blocks.len()
+        );
+
+        // Phase 3: Process blocks in order
+        info!(
+            "Phase 3: Processing {} blocks in order",
+            sorted_blocks.len()
+        );
+        let mut blocks_processed = 0;
+
+        for (i, buffered_block) in sorted_blocks.iter().enumerate() {
+            // Check for shutdown
+            if self.is_cancelled() {
+                info!("Cancellation detected during block processing, stopping");
+                break;
+            }
+
+            // Validate and process the block
+            match self.process_block(buffered_block.block.clone()).await {
+                Ok(()) => {
+                    // Store the block in database
+                    if let Some(database) = &self.database {
+                        if let Err(e) = database.store_block(&buffered_block.block).await {
+                            error!("Failed to store block in database: {}", e);
+                            // Continue processing even if storage fails
+                        }
+
+                        // Store the header as well for efficient lookup
+                        if let Err(e) = database.store_header(buffered_block.block.header()).await {
+                            error!("Failed to store header in database: {}", e);
+                        }
+                    }
+
+                    // Update progress
+                    {
+                        let mut progress = self.progress.write().await;
+                        progress.blocks_downloaded = progress.blocks_downloaded.saturating_add(1);
+                    }
+
+                    info!(
+                        "Successfully processed block: {} ({}/{})",
+                        buffered_block.hash,
+                        i + 1,
+                        sorted_blocks.len()
+                    );
+
+                    blocks_processed += 1;
+                }
+                Err(e) => {
+                    error!("Failed to process block {}: {}", buffered_block.hash, e);
+                    // Continue with other blocks even if one fails
+                }
+            }
+        }
+
+        info!(
+            "COMPLETED BLOCK DOWNLOAD: Processed {} out of {} buffered blocks",
+            blocks_processed,
+            sorted_blocks.len()
+        );
+        Ok(blocks_processed)
     }
 
     /// Processes a received block.
@@ -1343,6 +1482,8 @@ impl BlockSynchronizer {
                 // This might be the genesis block, or we don't have the parent
                 if header.previous_block_hash() == BlockHash::all_zeros() {
                     0 // Genesis block
+                } else if header.previous_block_hash() == self.get_genesis_hash() {
+                    1 // First block after genesis
                 } else {
                     return Err(ConnectionError::InvalidMessage(format!(
                         "Previous block {} not found",
