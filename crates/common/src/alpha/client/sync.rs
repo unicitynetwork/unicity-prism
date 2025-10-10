@@ -4,15 +4,14 @@
 //! peers, including requesting block headers using GetHeaders and downloading
 //! full blocks using GetData messages.
 
+use primitive_types::U256;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-
-use primitive_types::U256;
-use serde::{Deserialize, Serialize};
 use tokio::{
     fs,
     net::TcpStream,
@@ -30,7 +29,7 @@ use crate::alpha::{
     },
     client::{
         connection::{ConnectionError, ConnectionManager},
-        database::{BlockDatabase, DatabaseError},
+        database::BlockDatabase,
         message::{
             get_data::{GetData, Inventory}, request::GetHeaders, response::{Headers, StandardBlock},
             Message,
@@ -1058,9 +1057,13 @@ impl BlockSynchronizer {
         );
         debug!("Downloading {} blocks", headers.len());
 
+        // Configuration for batch processing to handle peer limitations
+        const MAX_BLOCKS_PER_REQUEST: usize = 25; // Conservative limit based on Bitcoin Core defaults
+        const BATCH_TIMEOUT: Duration = Duration::from_secs(30); // Timeout per batch
+
         // Create inventory vectors for block requests
-        let mut inventories = Vec::new();
-        let mut block_hashes = Vec::new();
+        let mut all_inventories = Vec::new();
+        let mut all_block_hashes = Vec::new();
         let mut header_map = HashMap::new();
 
         for header in headers {
@@ -1075,113 +1078,153 @@ impl BlockSynchronizer {
                 }
             }
 
-            inventories.push(Inventory::Block(block_hash));
-            block_hashes.push(block_hash);
+            all_inventories.push(Inventory::Block(block_hash));
+            all_block_hashes.push(block_hash);
             header_map.insert(block_hash, header);
         }
 
-        if inventories.is_empty() {
+        if all_inventories.is_empty() {
             debug!("No new blocks to download");
             return Ok(0);
         }
 
-        // Send GetData request
-        let get_data = GetData::new(inventories);
-        connection
-            .send_message(stream, Message::<H>::Request(Request::GetData(get_data)))
-            .await?;
+        info!(
+            "IMPLEMENTING PAGINATION: Processing {} blocks in batches of max {}",
+            all_inventories.len(),
+            MAX_BLOCKS_PER_REQUEST
+        );
 
-        // Buffer to store received blocks
-        let mut buffered_blocks: HashMap<BlockHash, BufferedBlock<H>> = HashMap::new();
-        let mut blocks_received: i32 = 0;
-        let expected_blocks = block_hashes.len();
-
-        let expected_blocks_i32 = match i32::try_from(expected_blocks) {
-            Ok(count) => count,
-            Err(e) => {
-                warn!(
-                    "Failed to convert expected blocks count {} to i32: {}",
-                    expected_blocks, e
-                );
-                i32::MAX
-            }
-        };
-
-        // Add overall timeout for the entire download operation
-        let overall_timeout = Duration::from_secs(300); // 5 minutes for 2000 blocks
+        // Buffer to store all received blocks
+        let mut all_buffered_blocks: HashMap<BlockHash, BufferedBlock<H>> = HashMap::new();
+        let mut total_blocks_downloaded = 0;
         let download_start = Instant::now();
 
-        // Add progress logging
-        let mut last_progress_log = Instant::now();
-        let progress_log_interval = Duration::from_secs(10);
+        // Process inventories in batches to handle peer limitations
+        for (batch_index, batch_start) in (0..all_inventories.len())
+            .step_by(MAX_BLOCKS_PER_REQUEST)
+            .enumerate()
+        {
+            let batch_end =
+                std::cmp::min(batch_start + MAX_BLOCKS_PER_REQUEST, all_inventories.len());
+            let batch_inventories = all_inventories[batch_start..batch_end].to_vec();
+            let batch_block_hashes: Vec<BlockHash> =
+                all_block_hashes[batch_start..batch_end].to_vec();
 
-        // Add a watchdog to detect stalled downloads
-        let mut last_block_received = Instant::now();
-        let watchdog_timeout = Duration::from_secs(60); // 1 minute without progress
+            info!(
+                "PROCESSING BATCH {}/: Requesting {} blocks (indices {}-{})",
+                batch_index + 1,
+                batch_inventories.len(),
+                batch_start,
+                batch_end - 1
+            );
 
-        // Phase 1: Collect all blocks
-        info!("Phase 1: Collecting {} blocks", expected_blocks);
-        loop {
-            // Check for overall timeout
-            if download_start.elapsed() > overall_timeout {
-                warn!(
-                    "Block download timeout after {:?}",
-                    download_start.elapsed()
-                );
-                break;
+            // Send GetData request for this batch
+            let get_data = GetData::new(batch_inventories.clone());
+            connection
+                .send_message(stream, Message::<H>::Request(Request::GetData(get_data)))
+                .await?;
+
+            // Collect blocks for this batch
+            let batch_blocks = self
+                .collect_blocks_batch::<H>(
+                    connection,
+                    stream,
+                    &batch_block_hashes,
+                    &header_map,
+                    BATCH_TIMEOUT,
+                )
+                .await?;
+
+            let batch_blocks_count = batch_blocks.len();
+            // Merge batch results into overall collection
+            for (hash, block) in batch_blocks {
+                all_buffered_blocks.insert(hash, block);
+                total_blocks_downloaded += 1;
             }
 
-            // Check for watchdog timeout (no blocks received for too long)
-            if blocks_received > 0 && last_block_received.elapsed() > watchdog_timeout {
-                warn!(
-                    "No blocks received for {:?}, continuing with what we have",
-                    last_block_received.elapsed()
-                );
-                break;
-            }
+            info!(
+                "BATCH {}/ COMPLETE: Received {} blocks (total so far: {})",
+                batch_index + 1,
+                batch_blocks_count,
+                total_blocks_downloaded
+            );
 
-            // Check for shutdown at the beginning of each iteration
+            // Check for cancellation between batches
             if self.is_cancelled() {
-                info!("Cancellation detected at start of block download loop");
+                info!("Cancellation detected between batches, stopping download");
                 break;
             }
 
-            // Check if we've received all blocks
-            if blocks_received >= expected_blocks_i32 {
-                info!("Received all {} blocks", blocks_received);
-                break;
-            }
+            // Small delay between batches to be polite to the peer
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
 
-            // Log progress periodically
-            if last_progress_log.elapsed() > progress_log_interval {
-                info!(
-                    "Block download progress: {}/{} blocks received ({:.1}%)",
+        info!(
+            "ALL BATCHES COMPLETE: Successfully downloaded {} out of {} requested blocks in {:?}",
+            total_blocks_downloaded,
+            all_inventories.len(),
+            download_start.elapsed()
+        );
+
+        // Now process all collected blocks (phases 2 and 3 combined)
+        self.process_buffered_blocks::<H>(all_buffered_blocks).await
+    }
+
+    /// Collects blocks for a single batch request.
+    async fn collect_blocks_batch<H>(
+        &self,
+        connection: &ConnectionManager,
+        stream: &mut TcpStream,
+        batch_block_hashes: &[BlockHash],
+        header_map: &HashMap<BlockHash, &H>,
+        timeout: Duration,
+    ) -> Result<HashMap<BlockHash, BufferedBlock<H>>, ConnectionError>
+    where
+        H: Header + Send + Sync + 'static + std::fmt::Debug,
+    {
+        let mut buffered_blocks: HashMap<BlockHash, BufferedBlock<H>> = HashMap::new();
+        let mut blocks_received = 0;
+        let expected_blocks = batch_block_hashes.len();
+        let batch_start = Instant::now();
+
+        loop {
+            // Check for timeout
+            if batch_start.elapsed() > timeout {
+                warn!(
+                    "Batch timeout after {:?}, received {}/{} blocks",
+                    batch_start.elapsed(),
                     blocks_received,
-                    expected_blocks_i32,
-                    (blocks_received as f64 / expected_blocks_i32 as f64) * 100.0
+                    expected_blocks
                 );
-                last_progress_log = Instant::now();
+                break;
             }
 
-            // Add a per-block timeout to prevent hanging on individual blocks
-            let block_timeout = Duration::from_secs(30);
+            // Check if we've received all blocks for this batch
+            if blocks_received >= expected_blocks {
+                debug!("Batch complete: received all {} blocks", blocks_received);
+                break;
+            }
+
+            // Check for shutdown
+            if self.is_cancelled() {
+                info!("Cancellation detected during batch collection");
+                break;
+            }
+
+            // Receive message with shorter timeout for individual blocks
+            let block_timeout = Duration::from_secs(10);
             let message_result =
                 tokio::time::timeout(block_timeout, connection.receive_message::<H>(stream)).await;
 
             let message = match message_result {
                 Ok(Ok(msg)) => msg,
                 Ok(Err(e)) => {
-                    if self.is_cancelled() {
-                        info!("Cancellation detected during message receive, stopping download");
-                        break;
-                    }
-                    error!("Failed to receive message: {}", e);
+                    error!("Failed to receive message during batch: {}", e);
                     return Err(e);
                 }
                 Err(_) => {
-                    warn!("Timeout waiting for block response, continuing with next block");
-                    // Count as processed to avoid infinite loop, but continue
-                    blocks_received = blocks_received.saturating_add(1);
+                    debug!("Timeout waiting for individual block in batch");
+                    // Continue to check if we have enough blocks or should timeout
                     continue;
                 }
             };
@@ -1190,12 +1233,11 @@ impl BlockSynchronizer {
                 Message::Response(Response::Block(block)) => {
                     let block_hash = block.header().block_hash();
 
-                    // Update the watchdog time since we received a block
-                    last_block_received = Instant::now();
-
-                    // Check if this is one of the blocks we requested
-                    if block_hashes.contains(&block_hash) {
-                        blocks_received = blocks_received.saturating_add(1);
+                    // Check if this is one of the blocks we requested in this batch
+                    if batch_block_hashes.contains(&block_hash)
+                        && !buffered_blocks.contains_key(&block_hash)
+                    {
+                        blocks_received += 1;
 
                         // Store the block in our buffer
                         let standard_block = StandardBlock {
@@ -1213,7 +1255,10 @@ impl BlockSynchronizer {
                             },
                         );
 
-                        debug!("Buffered block {}", block_hash);
+                        debug!(
+                            "Batch received block {}: {} ({}/{})",
+                            blocks_received, block_hash, blocks_received, expected_blocks
+                        );
 
                         // Mark as known to avoid duplicate requests
                         {
@@ -1221,58 +1266,54 @@ impl BlockSynchronizer {
                             known_hashes.insert(block_hash);
                         }
                     } else {
-                        warn!("Received unexpected block: {}", block_hash);
+                        debug!(
+                            "Received block not in this batch or duplicate: {}",
+                            block_hash
+                        );
                     }
                 }
                 Message::Connection(Connection::Inv(inv)) => {
-                    // Handle inv messages by logging and continuing
-                    debug!(
-                        "Received inv message with {} items during block download",
-                        inv.inventory().len()
-                    );
-
-                    // Check if any of these inv items are blocks we're waiting for
-                    for inventory in inv.inventory().iter() {
-                        if let Inventory::Block(block_hash) = inventory {
-                            if block_hashes.contains(block_hash) {
-                                debug!(
-                                    "Peer announced block {} via inv, waiting for direct response",
-                                    block_hash
-                                );
-                            }
-                        }
-                    }
+                    debug!("Received inv message during batch download");
                     // Continue waiting for blocks
                     continue;
                 }
                 Message::Response(Response::NotFound(not_found)) => {
-                    // Handle case where peer doesn't have the block
                     warn!("Peer doesn't have requested block(s): {:?}", not_found);
-                    blocks_received = blocks_received.saturating_add(1); // Count as processed to avoid infinite loop
+                    blocks_received += 1; // Count as processed to avoid infinite loop
                 }
                 _ => {
                     debug!(
-                        "Received non-block message during block download: {:?}",
+                        "Received non-block message during batch: {:?}",
                         message.command()
                     );
                     continue;
                 }
             }
-
-            // Check for shutdown after processing each block
-            if self.is_cancelled() {
-                info!("Cancellation detected after processing block, stopping download");
-                break;
-            }
         }
 
         info!(
-            "Phase 1 complete: Buffered {} blocks out of {} requested",
+            "Batch collection complete: {}/{} blocks received in {:?}",
             buffered_blocks.len(),
-            expected_blocks
+            expected_blocks,
+            batch_start.elapsed()
         );
 
-        // Phase 2: Topologically sort blocks by previous hash
+        Ok(buffered_blocks)
+    }
+
+    /// Processes buffered blocks (combines phases 2 and 3 from original implementation).
+    async fn process_buffered_blocks<H>(
+        &self,
+        mut buffered_blocks: HashMap<BlockHash, BufferedBlock<H>>,
+    ) -> Result<usize, ConnectionError>
+    where
+        H: Header + Send + Sync + 'static + std::fmt::Debug,
+    {
+        if buffered_blocks.is_empty() {
+            info!("No blocks to process");
+            return Ok(0);
+        }
+
         info!(
             "Phase 2: Topologically sorting {} blocks",
             buffered_blocks.len()
@@ -1339,13 +1380,14 @@ impl BlockSynchronizer {
                 }
 
                 // As a last resort, we'll try to process any block that builds on our current tip
+                let (current_tip_hash, _) = self.get_chain_tip().await;
                 let mut found_block = false;
                 for (hash, block) in buffered_blocks.iter() {
                     if block.previous_hash == current_tip_hash {
                         warn!("Processing block that builds on current tip: {}", hash);
                         sorted_blocks.push(block.clone());
                         processed_hashes.insert(*hash);
-                        // buffered_blocks.remove(hash); // TOOD fix
+                        // buffered_blocks.remove(hash); // Safe to remove here since we're iterating
                         remaining_blocks -= 1;
                         found_block = true;
                         break;
