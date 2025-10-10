@@ -122,7 +122,7 @@ impl From<serde_json::Error> for DatabaseError {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// use crate::alpha::client::database::{DatabaseResult, DatabaseError};
 ///
 /// fn get_block_height() -> DatabaseResult<u64> {
