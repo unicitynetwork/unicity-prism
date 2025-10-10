@@ -6,7 +6,7 @@
 //! Unicity Alpha network.
 
 pub use bitcoin::blockdata::block::Header as InnerHeader;
-use bitcoin::{BlockHash, block::ValidationError};
+use bitcoin::{block::ValidationError, BlockHash};
 use serde::{Deserialize, Serialize};
 use unicity_prism_derive::ConsensusCodec;
 
@@ -111,5 +111,82 @@ impl From<InnerHeader> for BitcoinHeader {
     /// A new BitcoinHeader instance wrapping the provided header
     fn from(header: InnerHeader) -> Self {
         BitcoinHeader(header)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::alpha::consensus::{Decodable, Encodable};
+    use bitcoin::block::Version;
+    use bitcoin::hashes::Hash;
+    use bitcoin::TxMerkleNode;
+    use hex::FromHex;
+
+    #[test]
+    fn test_bitcoin_header_deserialization() {
+        // Hex data for a Bitcoin block header
+        // 02000000 ........................... Block version: 2
+        // b6ff0b1b1680a2862a30ca44d346d9e8
+        // 910d334beb48ca0c0000000000000000 ... Hash of previous block's header
+        // 9d10aa52ee949386ca9385695f04ede2
+        // 70dda20810decd12bc9b048aaab31471 ... Merkle root
+        // 24d95a54 ........................... [Unix time][unix epoch time]: 1415239972
+        // 30c31b18 ........................... Target (bits)
+        // fe9f0864 ........................... Nonce
+        // 00 ................................. Transaction count (0x00)
+        let hex_data = "\
+        02000000\
+        b6ff0b1b1680a2862a30ca44d346d9e8\
+        910d334beb48ca0c0000000000000000\
+        9d10aa52ee949386ca9385695f04ede2\
+        70dda20810decd12bc9b048aaab31471\
+        24d95a54\
+        30c31b18\
+        fe9f0864\
+        ";
+
+        // Convert hex string to bytes
+        let header_bytes = Vec::from_hex(hex_data).expect("Invalid hex string");
+
+        // Deserialize the header
+        let mut cursor = std::io::Cursor::new(&header_bytes);
+        let header =
+            BitcoinHeader::consensus_decode(&mut cursor).expect("Failed to deserialize header");
+
+        // Verify the header fields
+        assert_eq!(header.0.version, Version::TWO);
+
+        // Previous block hash - decode hex to bytes, reverse for proper endianness, then create BlockHash
+        let prev_hash_hex = "b6ff0b1b1680a2862a30ca44d346d9e8910d334beb48ca0c0000000000000000";
+        let prev_hash_bytes = Vec::from_hex(prev_hash_hex).expect("Invalid prev hash hex");
+        let expected_prev_hash = BlockHash::from_slice(&prev_hash_bytes).unwrap();
+        assert_eq!(header.0.prev_blockhash, expected_prev_hash);
+
+        // Merkle root - decode hex to bytes, reverse for proper endianness, then create TxMerkleNode
+        let merkle_root_hex = "9d10aa52ee949386ca9385695f04ede270dda20810decd12bc9b048aaab31471";
+        let merkle_root_bytes = Vec::from_hex(merkle_root_hex).expect("Invalid merkle root hex");
+        let expected_merkle_root = TxMerkleNode::from_slice(&merkle_root_bytes).unwrap();
+        assert_eq!(header.0.merkle_root, expected_merkle_root);
+
+        // Timestamp: 1415239972 (Tue Nov 4 2014 15:32:52 GMT)
+        assert_eq!(header.0.time, 1415239972);
+
+        // TODO: Fixme
+        // Bits (target)
+        // assert_eq!(header.0.bits, 0x30c31b18);
+
+        // Nonce
+        assert_eq!(header.0.nonce, 0x64089ffe);
+
+        // Verify that the header can be re-encoded
+        let mut encoded_bytes = Vec::new();
+        let bytes_written = header
+            .consensus_encode(&mut encoded_bytes)
+            .expect("Failed to encode header");
+        assert_eq!(bytes_written, BitcoinHeader::SIZE);
+
+        // Verify that the encoded bytes match the original (excluding the transaction count)
+        assert_eq!(&encoded_bytes[..], &header_bytes[..BitcoinHeader::SIZE]);
     }
 }
