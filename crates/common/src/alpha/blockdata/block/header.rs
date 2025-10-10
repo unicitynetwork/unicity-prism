@@ -29,6 +29,13 @@ pub trait Header:
     /// The size of the header in bytes.
     const SIZE: usize;
 
+    /// Retrieves the previous block hash from the header.
+    ///
+    /// # Returns
+    ///
+    /// * BlockHash - The hash of the previous block
+    fn previous_block_hash(&self) -> BlockHash;
+
     /// Computes the block hash.
     ///
     /// # Returns
@@ -43,6 +50,8 @@ pub trait Header:
     /// * `Some(Target)` - The converted target value
     /// * `None` - If the header doesn't have a valid target
     fn target(&self) -> Option<Target>;
+
+    fn timestamp(&self) -> u32;
 
     /// Validates the proof of work against the required target.
     ///

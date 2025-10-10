@@ -37,6 +37,10 @@ impl Header for BitcoinHeader {
     /// specification.
     const SIZE: usize = InnerHeader::SIZE;
 
+    fn previous_block_hash(&self) -> BlockHash {
+        self.0.prev_blockhash
+    }
+
     /// Computes the block hash using Bitcoin's standard double-SHA256
     /// algorithm.
     ///
@@ -65,6 +69,10 @@ impl Header for BitcoinHeader {
     ///   valid target
     fn target(&self) -> Option<Target> {
         Some(self.0.target().into())
+    }
+
+    fn timestamp(&self) -> u32 {
+        self.0.time
     }
 
     /// Validates the proof of work against the required target.

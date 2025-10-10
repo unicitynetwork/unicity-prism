@@ -303,7 +303,8 @@ mod tests {
 
         // Deserialize the bytes
         let mut cursor = Cursor::new(&hex_bytes);
-        let feefilter = FeeFilter::consensus_decode(&mut cursor).expect("Failed to decode FeeFilter");
+        let feefilter =
+            FeeFilter::consensus_decode(&mut cursor).expect("Failed to decode FeeFilter");
 
         // Verify the fee rate is 48,508 satoshis per kilobyte
         assert_eq!(feefilter.feerate(), 48508);
@@ -319,11 +320,14 @@ mod tests {
 
             // Serialize
             let mut serialized = Vec::new();
-            feefilter.consensus_encode(&mut serialized).expect("Failed to encode FeeFilter");
+            feefilter
+                .consensus_encode(&mut serialized)
+                .expect("Failed to encode FeeFilter");
 
             // Deserialize
             let mut cursor = Cursor::new(&serialized);
-            let deserialized = FeeFilter::consensus_decode(&mut cursor).expect("Failed to decode FeeFilter");
+            let deserialized =
+                FeeFilter::consensus_decode(&mut cursor).expect("Failed to decode FeeFilter");
 
             // Verify round-trip
             assert_eq!(deserialized.feerate(), feerate);

@@ -42,7 +42,7 @@ pub struct RandomXHeader {
     /// This creates the cryptographic link between blocks, forming the
     /// blockchain. Each block must reference the hash of the previous block
     /// to be valid.
-    pub previous_header: BlockHash,
+    pub previous_block_hash: BlockHash,
 
     /// The root hash of the merkle tree of transactions in the block.
     ///
@@ -85,7 +85,9 @@ impl Header for RandomXHeader {
     /// Bitcoin headers due to the additional randomx_hash field.
     const SIZE: usize = 4 + 32 + 32 + 4 + 4 + 4 + 32;
 
-    // 112
+    fn previous_block_hash(&self) -> BlockHash {
+        self.previous_block_hash
+    }
 
     /// Computes the block hash using Bitcoin's double-SHA256 algorithm.
     ///
@@ -119,15 +121,19 @@ impl Header for RandomXHeader {
         Target::from_compact(self.bits)
     }
 
+    fn timestamp(&self) -> u32 {
+        self.timestamp
+    }
+
     /// Validates the proof of work against the required target.
     ///
-    /// This method should verify that the RandomX hash is below the required
+    /// This method verifies that the RandomX hash is below the required
     /// target, confirming that the miner has performed sufficient RandomX
     /// work to satisfy the difficulty.
     ///
     /// # Arguments
     ///
-    /// * `_required_target` - The target that the RandomX hash must be below to
+    /// * `required_target` - The target that the RandomX hash must be below to
     ///   be valid
     ///
     /// # Returns
@@ -135,16 +141,16 @@ impl Header for RandomXHeader {
     /// * `Ok(BlockHash)` - If the proof of work is valid, returns the block
     ///   hash
     /// * `Err(ValidationError)` - If the proof of work is invalid
-    ///
-    /// # TODO
-    ///
-    /// This method is currently unimplemented and needs to be completed.
-    /// It should validate the RandomX hash against the target, not the block
-    /// hash.
-    fn validate_pow(&self, _required_target: Target) -> Result<BlockHash, ValidationError> {
-        // TODO: Implement RandomX proof-of-work validation
-        // This should validate that self.randomx_hash is below the required_target
-        // For now, return an error to indicate this is not yet implemented
-        Err(ValidationError::BadProofOfWork)
+    fn validate_pow(&self, required_target: Target) -> Result<BlockHash, ValidationError> {
+        // Convert the RandomX hash to a U256 value for comparison
+        let hash_value = primitive_types::U256::from_big_endian(&self.randomx_hash);
+        let target_value = required_target.as_u256();
+
+        // Check if the RandomX hash is below the target
+        if hash_value <= target_value {
+            Ok(self.block_hash())
+        } else {
+            Err(ValidationError::BadProofOfWork)
+        }
     }
 }

@@ -23,6 +23,7 @@ chrono.workspace = true
 clap = { version = "4.5.48", features = ["derive"] }
 directories.workspace = true
 tokio.workspace = true
+tokio-util = "0.7"
 rand.workspace = true
 sha2.workspace = true
 serde.workspace = true

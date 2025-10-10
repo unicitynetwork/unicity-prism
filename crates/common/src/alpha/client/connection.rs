@@ -16,9 +16,9 @@ use tracing::{debug, error, info, warn};
 use crate::alpha::{
     blockdata::block::{BitcoinHeader, Header},
     client::{
+        Message,
         message::MessageCommand,
         network::{NetworkError, NetworkMessage, NetworkMessageHeader},
-        Message,
     },
     consensus::Decodable,
     hashes::ChecksumHash,
@@ -469,7 +469,7 @@ mod tests {
     use super::*;
     use crate::alpha::{
         blockdata::block::BitcoinHeader,
-        client::message::{connection::Version, Connection, Message},
+        client::message::{Connection, Message, connection::Version},
         p2p::address::AddrV2,
     };
 

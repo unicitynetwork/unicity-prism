@@ -522,6 +522,15 @@ impl Target {
     fn to_big_endian(self) -> [u8; 32] {
         self.0.to_big_endian()
     }
+
+    /// Returns the underlying U256 value of the Target.
+    ///
+    /// # Returns
+    ///
+    /// * `U256` - The underlying U256 value representing the target.
+    pub fn as_u256(&self) -> U256 {
+        self.0
+    }
 }
 
 impl From<BitcoinTarget> for Target {

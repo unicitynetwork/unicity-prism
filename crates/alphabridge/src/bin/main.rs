@@ -3,16 +3,19 @@
 //! This module implements a Bitcoin P2P node that can connect to peers,
 //! perform handshakes, and synchronize blockchain data.
 
-use std::{net::SocketAddr, str::FromStr};
+use std::{net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc};
 
 use clap::Parser;
-use tracing::{debug, error, info};
+use directories::ProjectDirs;
+use tokio::{io::AsyncWriteExt, sync::RwLock};
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use unicity_prism_common::alpha::{
     blockdata::block::BitcoinHeader,
     client::{
-        BlockSynchronizer, ConnectionConfig, ConnectionError, ConnectionManager, HandshakeHandler,
-        SyncConfig,
+        BlockDatabase, BlockSynchronizer, ConnectionConfig, ConnectionError, ConnectionManager,
+        HandshakeHandler, SyncConfig,
     },
     network::Network,
     p2p::ServiceFlags,
@@ -65,6 +68,18 @@ struct Args {
     /// Whether to download full blocks or just headers
     #[arg(long, default_value = "true")]
     download_full_blocks: bool,
+
+    /// Data directory for persistent storage
+    #[arg(long)]
+    data_dir: Option<String>,
+
+    /// Whether to continuously monitor for new blocks
+    #[arg(long, default_value = "true")]
+    continuous_sync: bool,
+
+    /// Interval for checking new blocks (in seconds)
+    #[arg(long, default_value = "30")]
+    sync_interval: u64,
 }
 
 /// Initializes tracing with the specified log level.
@@ -117,6 +132,15 @@ fn parse_peer_addresses(
     }
 
     Ok(addrs)
+}
+
+/// Gets the default application data directory based on the platform.
+fn get_default_data_dir() -> Option<PathBuf> {
+    if let Some(proj_dirs) = ProjectDirs::from("org", "unicitylabs", "prism") {
+        Some(proj_dirs.data_dir().to_path_buf())
+    } else {
+        None
+    }
 }
 
 /// Gets default peer addresses for the specified network.
@@ -264,17 +288,146 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ServiceFlags::NONE
     );
 
-    // Create block synchronizer
+    // Determine data directory
+    let data_dir = match args.data_dir {
+        Some(dir) => {
+            info!("Using custom data directory: {}", dir);
+            Some(PathBuf::from(dir))
+        }
+        None => match get_default_data_dir() {
+            Some(dir) => {
+                info!("Using default data directory: {}", dir.display());
+                Some(dir)
+            }
+            None => {
+                warn!("Could not determine default data directory, using memory-only mode");
+                None
+            }
+        },
+    };
+
+    // Create network-specific data directory
+    let network_data_dir = if let Some(base_dir) = data_dir {
+        let network_dir = base_dir.join(match network {
+            Network::Mainnet => "mainnet",
+            Network::Testnet => "testnet",
+            Network::Regtest => "regtest",
+        });
+
+        // Create directory if it doesn't exist
+        if let Err(e) = tokio::fs::create_dir_all(&network_dir).await {
+            error!(
+                "Failed to create data directory {}: {}",
+                network_dir.display(),
+                e
+            );
+            None
+        } else {
+            info!(
+                "Using network-specific data directory: {}",
+                network_dir.display()
+            );
+            Some(network_dir)
+        }
+    } else {
+        None
+    };
+
+    // Set up signal handling for graceful shutdown
+    let cancel_token = CancellationToken::new();
+    let signal_token = cancel_token.clone();
+
+    // Create block synchronizer with database
     let sync_config = SyncConfig {
         max_headers_per_request: 2000,
-        max_blocks_to_download: args.max_blocks as usize,
+        max_blocks_to_download: if args.max_blocks == 1000 {
+            usize::MAX
+        } else {
+            args.max_blocks as usize
+        },
         download_full_blocks: args.download_full_blocks,
+        data_dir: network_data_dir.clone(),
+        continuous_sync: args.continuous_sync,
+        sync_interval: args.sync_interval,
+        max_retries: 3,
+        request_timeout: std::time::Duration::from_secs(60),
     };
-    let block_synchronizer = BlockSynchronizer::new(sync_config);
+
+    // Initialize database if data directory is provided
+    let block_synchronizer = if let Some(ref data_dir) = sync_config.data_dir {
+        let db_path = PathBuf::from(data_dir).join("blockchain.db");
+        info!("Initializing blockchain database at: {}", db_path.display());
+
+        match BlockDatabase::open(&db_path).await {
+            Ok(database) => {
+                info!("Database opened successfully");
+                let db = Arc::new(database);
+
+                // Migrate from JSON if needed
+                if let Err(e) = db.migrate_from_json(data_dir).await {
+                    warn!("Failed to migrate from JSON: {}", e);
+                }
+
+                let mut sync = BlockSynchronizer::with_database(sync_config, db);
+                // Update the synchronizer with our cancellation token
+                sync.set_cancel_token(cancel_token.clone());
+                sync
+            }
+            Err(e) => {
+                error!(
+                    "Failed to open database: {}, falling back to memory-only mode",
+                    e
+                );
+                let mut sync = BlockSynchronizer::new(sync_config);
+                sync.set_cancel_token(cancel_token.clone());
+                sync
+            }
+        }
+    } else {
+        info!("No data directory available, using memory-only mode");
+        let mut sync = BlockSynchronizer::new(sync_config);
+        sync.set_cancel_token(cancel_token.clone());
+        sync
+    };
+
+    // Handle Ctrl+C
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.unwrap_or_default();
+        warn!("Received Ctrl+C, initiating shutdown...");
+        signal_token.cancel();
+    });
+
+    // Handle termination signal (for systemd, docker, etc.)
+    let term_token = cancel_token.clone();
+    tokio::spawn(async move {
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{SignalKind, signal};
+            let mut sigterm = signal(SignalKind::terminate()).unwrap();
+            sigterm.recv().await;
+            warn!("Received SIGTERM, initiating shutdown...");
+            term_token.cancel();
+        }
+        #[cfg(not(unix))]
+        {
+            // On Windows, we only have Ctrl+C handling
+        }
+    });
 
     // Connect to peers and start synchronization
     let mut successful_connections = 0usize;
+    let mut active_streams = Vec::new();
+    let mut join_handles = Vec::new();
+
+    // Clone peer_addresses to avoid borrowing issues
+    let _peer_addresses_clone = peer_addresses.clone();
+
     for peer_addr in &peer_addresses {
+        if cancel_token.is_cancelled() {
+            info!("Cancellation detected, stopping new connections");
+            break;
+        }
+
         match connect_and_sync(
             &connection_manager,
             &handshake_handler,
@@ -286,11 +439,97 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(_) => {
                 successful_connections = successful_connections.saturating_add(1);
                 info!("Successfully synced with peer: {}", peer_addr);
+
+                // Keep the connection alive for continuous sync
+                if args.continuous_sync {
+                    match connection_manager.connect(*peer_addr).await {
+                        Ok(mut stream) => {
+                            if let Ok(peer_info) = handshake_handler
+                                .perform_handshake::<BitcoinHeader>(
+                                    &connection_manager,
+                                    &mut stream,
+                                    *peer_addr,
+                                )
+                                .await
+                            {
+                                active_streams.push((peer_addr, stream, peer_info));
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to reconnect to peer {}: {}", peer_addr, e);
+                        }
+                    }
+                }
             }
             Err(e) => {
                 error!("Failed to sync with peer {}: {}", peer_addr, e);
             }
         }
+    }
+
+    // If continuous sync is enabled, start monitoring
+    if args.continuous_sync && !active_streams.is_empty() {
+        info!(
+            "Starting continuous synchronization with {} peers",
+            active_streams.len()
+        );
+
+        // Create a child token for the monitoring task
+        let monitor_token = cancel_token.child_token();
+        let sync_clone = block_synchronizer.clone();
+
+        let monitor_handle = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+
+            loop {
+                tokio::select! {
+                    _ = monitor_token.cancelled() => {
+                        info!("Monitor task cancelled");
+                        break;
+                    }
+                    _ = interval.tick() => {
+                        // Print progress periodically
+                        let progress = sync_clone.get_progress().await;
+                        if progress.headers_synced > 0 && progress.headers_synced % 100 == 0 {
+                            info!(
+                                "Sync progress: {} headers, {} blocks, current height: {}, sync rate: {:.2} headers/sec",
+                                progress.headers_synced,
+                                progress.blocks_downloaded,
+                                progress.current_height,
+                                progress.sync_rate
+                            );
+                        }
+
+                        // Check if synchronizer is still monitoring
+                        if !progress.is_monitoring {
+                            info!("Synchronizer is no longer monitoring");
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        join_handles.push(monitor_handle);
+    }
+
+    // Wait for cancellation
+    cancel_token.cancelled().await;
+    info!("Shutdown initiated");
+
+    // Abort all tasks with a short timeout
+    for handle in &join_handles {
+        handle.abort();
+    }
+
+    // Shutdown synchronizer
+    info!("Shutting down block synchronizer...");
+    block_synchronizer.shutdown().await;
+
+    // Close any remaining active connections
+    while let Some((peer_addr, mut stream, _)) = active_streams.pop() {
+        let _ = stream.shutdown().await;
+        info!("Closed connection to {}", peer_addr);
     }
 
     // Print final statistics
@@ -303,86 +542,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         progress.blocks_downloaded
     );
 
-    // NOTE: KEEP THIS COMMENTED OUT FOR NOW - KEEP-ALIVE MECHANISM
-    // info!("Starting keep-alive mechanism...");
-    // let keep_alive_interval = std::time::Duration::from_secs(30); // Send ping every 30 seconds
-    //
-    // // Create a vector to store active connections for keep-alive
-    // let mut active_connections = Vec::new();
-    //
-    // // Reconnect to peers for keep-alive
-    // for peer_addr in peer_addresses {
-    //     match connection_manager.connect(peer_addr).await {
-    //         Ok(mut stream) => {
-    //             info!("Reconnected to peer for keep-alive: {}", peer_addr);
-    //
-    //             // Perform handshake again
-    //             match handshake_handler
-    //                 .perform_handshake::<BitcoinHeader>(&connection_manager, &mut stream, peer_addr)
-    //                 .await
-    //             {
-    //                 Ok(peer_info) => {
-    //                     info!(
-    //                         "Handshake completed for keep-alive with peer: {}",
-    //                         peer_addr
-    //                     );
-    //                     active_connections.push((peer_addr, stream, peer_info));
-    //                 }
-    //                 Err(e) => {
-    //                     error!("Keep-alive handshake failed with peer {}: {}", peer_addr, e);
-    //                 }
-    //             }
-    //         }
-    //         Err(e) => {
-    //             error!(
-    //                 "Failed to reconnect to peer {} for keep-alive: {}",
-    //                 peer_addr, e
-    //             );
-    //         }
-    //     }
-    // }
-    //
-    // if active_connections.is_empty() {
-    //     warn!("No active connections available for keep-alive mechanism");
-    // } else {
-    //     info!(
-    //         "Keep-alive mechanism started with {} active connections",
-    //         active_connections.len()
-    //     );
-    //
-    //     // Run keep-alive loop
-    //     let mut ping_counter = 0;
-    //     loop {
-    //         tokio::time::sleep(keep_alive_interval).await;
-    //         ping_counter += 1;
-    //
-    //         info!(
-    //             "Sending keep-alive ping #{} to {} peers",
-    //             ping_counter,
-    //             active_connections.len()
-    //         );
-    //
-    //         for (peer_addr, stream, _) in &mut active_connections {
-    //             let ping = unicity_prism_common::alpha::client::message::connection::Ping::new();
-    //             let message =
-    //                 unicity_prism_common::alpha::client::Message::<BitcoinHeader>::Connection(
-    //                     unicity_prism_common::alpha::client::message::Connection::Ping(ping),
-    //                 );
-    //
-    //             match connection_manager.send_message(stream, message).await {
-    //                 Ok(_) => {
-    //                     debug!("Keep-alive ping sent to peer: {}", peer_addr);
-    //                 }
-    //                 Err(e) => {
-    //                     error!(
-    //                         "Failed to send keep-alive ping to peer {}: {}",
-    //                         peer_addr, e
-    //                     );
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
+    // Wait for all spawned tasks to complete with timeout
+    info!("Waiting for all tasks to complete...");
+    for handle in join_handles {
+        match tokio::time::timeout(std::time::Duration::from_secs(5), handle).await {
+            Ok(Ok(_)) => {
+                debug!("Task completed successfully");
+            }
+            Ok(Err(e)) => {
+                error!("Task failed during shutdown: {}", e);
+            }
+            Err(_) => {
+                warn!("Task didn't complete within timeout, continuing shutdown");
+            }
+        }
+    }
+
+    // Close any remaining active connections with timeout
+    for (peer_addr, mut stream, _) in active_streams {
+        // Try to close the connection, but don't wait too long
+        match tokio::time::timeout(std::time::Duration::from_millis(500), stream.shutdown()).await {
+            Ok(Ok(_)) => {
+                info!("Closed connection to {}", peer_addr);
+            }
+            Ok(Err(e)) => {
+                error!("Failed to close connection to {}: {}", peer_addr, e);
+            }
+            Err(_) => {
+                warn!(
+                    "Timeout closing connection to {} (continuing shutdown)",
+                    peer_addr
+                );
+                // Just continue with shutdown, TcpStream will be closed when
+                // dropped
+            }
+        }
+    }
+
+    info!("Graceful shutdown completed successfully");
 
     Ok(())
 }

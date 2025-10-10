@@ -28,19 +28,32 @@
 
 use unicity_prism_derive::ConsensusCodec;
 
-use crate::alpha::blockdata::{
-    block::{Header, WitnessMerkleNode},
-    transaction::Transaction,
+use crate::alpha::{
+    blockdata::{
+        block::{Header, WitnessMerkleNode},
+        transaction::Transaction,
+    },
+    consensus::Encodable,
+    io::Write,
 };
 
 /// Trait for block response messages to allow type-safe handling of both
 /// witness and non-witness blocks.
-pub trait Block<H: Header>: Send + Sync {
+pub trait Block<H: Header>: Send + Sync + ConsensusEncodable {
     /// Returns the block header.
     fn header(&self) -> &H;
 
     /// Returns the list of transactions in the block.
     fn transactions(&self) -> &[Transaction];
+}
+
+/// Trait for consensus encoding of blocks.
+pub trait ConsensusEncodable: Send + Sync {
+    /// Encodes the block using consensus encoding.
+    fn consensus_encode<W: Write + ?Sized>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, crate::alpha::io::Error>;
 }
 
 /// Represents a standard block response message in the P2P protocol.
@@ -95,6 +108,17 @@ impl<H: Header> StandardBlock<H> {
     /// * `&[Transaction]` - A slice of the transactions in the block.
     pub fn transactions(&self) -> &[Transaction] {
         &self.transactions
+    }
+}
+
+impl<H: Header> ConsensusEncodable for StandardBlock<H> {
+    /// Encodes the block using consensus encoding.
+    fn consensus_encode<W: Write + ?Sized>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, crate::alpha::io::Error> {
+        // Use the derived Encodable implementation
+        Encodable::consensus_encode(self, writer)
     }
 }
 
@@ -164,6 +188,17 @@ impl<H: Header> WitnessBlock<H> {
     }
 }
 
+impl<H: Header> ConsensusEncodable for WitnessBlock<H> {
+    /// Encodes the block using consensus encoding.
+    fn consensus_encode<W: Write + ?Sized>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, crate::alpha::io::Error> {
+        // Use the derived Encodable implementation
+        Encodable::consensus_encode(self, writer)
+    }
+}
+
 impl<H: Header> Block<H> for WitnessBlock<H> {
     /// Returns the block header.
     fn header(&self) -> &H {
@@ -178,8 +213,10 @@ impl<H: Header> Block<H> for WitnessBlock<H> {
 
 #[cfg(test)]
 mod tests {
-    pub use bitcoin::blockdata::block::Header as InnerBitcoinHeader;
-    use bitcoin::{BlockHash, TxMerkleNode, block::Version, pow::CompactTarget};
+    use bitcoin::{
+        BlockHash, TxMerkleNode, block::Version, blockdata::block::Header as InnerBitcoinHeader,
+        pow::CompactTarget,
+    };
 
     use super::*;
     use crate::alpha::{
@@ -345,7 +382,11 @@ mod tests {
 
         // Encode
         let mut encoded = Vec::new();
-        original.consensus_encode(&mut encoded).unwrap();
+        crate::alpha::client::message::response::block::ConsensusEncodable::consensus_encode(
+            &original,
+            &mut encoded,
+        )
+        .unwrap();
 
         // Decode
         let mut cursor = std::io::Cursor::new(&encoded);
@@ -364,7 +405,11 @@ mod tests {
 
         // Encode
         let mut encoded = Vec::new();
-        original.consensus_encode(&mut encoded).unwrap();
+        crate::alpha::client::message::response::block::ConsensusEncodable::consensus_encode(
+            &original,
+            &mut encoded,
+        )
+        .unwrap();
 
         // Decode
         let mut cursor = std::io::Cursor::new(&encoded);
