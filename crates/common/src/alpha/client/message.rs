@@ -16,6 +16,7 @@
 
 pub mod connection;
 pub mod get_data;
+pub mod inv;
 pub mod inventory;
 pub(crate) mod request;
 pub(crate) mod response;
@@ -24,6 +25,7 @@ use std::io;
 
 use bitcoin::{consensus::Encodable, p2p::message::CommandString};
 pub use connection::{Ping, Pong, SendCmpct, Version};
+pub use inv::Inv;
 pub use request::GetHeaders;
 
 pub(crate) use crate::alpha::client::message::response::{Headers, NotFound, Tx};
@@ -50,6 +52,8 @@ pub enum MessageCommand {
     Pong,
     /// WtxIdRelay message - signal preference for wtxid-based transaction relay
     WtxIdRelay,
+    /// Inv message - advertise known inventory
+    Inv,
     /// GetHeaders message - request for block headers
     GetHeaders,
     /// GetData message - request for specific data items
@@ -96,6 +100,11 @@ impl MessageCommand {
                 Ok(Message::Connection(Connection::Pong(pong)))
             }
             "wtxidrelay" => Ok(Message::Connection(Connection::WtxIdRelay)),
+            "inv" => {
+                let inv_list = inventory::InventoryList::consensus_decode(cursor)
+                    .map_err(NetworkError::Consensus)?;
+                Ok(Message::Connection(Connection::Inv(Inv(inv_list))))
+            }
             "getheaders" => {
                 let get_headers =
                     GetHeaders::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
@@ -154,6 +163,7 @@ impl MessageCommand {
             "ping" => Ok(MessageCommand::Ping),
             "pong" => Ok(MessageCommand::Pong),
             "wtxidrelay" => Ok(MessageCommand::WtxIdRelay),
+            "inv" => Ok(MessageCommand::Inv),
             "getheaders" => Ok(MessageCommand::GetHeaders),
             "getdata" => Ok(MessageCommand::GetData),
             "headers" => Ok(MessageCommand::Headers),
@@ -185,6 +195,7 @@ impl MessageCommand {
             MessageCommand::Ping => "ping",
             MessageCommand::Pong => "pong",
             MessageCommand::WtxIdRelay => "wtxidrelay",
+            MessageCommand::Inv => "inv",
             MessageCommand::GetHeaders => "getheaders",
             MessageCommand::GetData => "getdata",
             MessageCommand::Headers => "headers",
@@ -218,6 +229,11 @@ impl MessageCommand {
                 Ok(Message::Connection(Connection::Pong(pong)))
             }
             MessageCommand::WtxIdRelay => Ok(Message::Connection(Connection::WtxIdRelay)),
+            MessageCommand::Inv => {
+                let inv_list = inventory::InventoryList::consensus_decode(cursor)
+                    .map_err(NetworkError::Consensus)?;
+                Ok(Message::Connection(Connection::Inv(Inv(inv_list))))
+            }
             MessageCommand::GetHeaders => {
                 let get_headers =
                     GetHeaders::consensus_decode(cursor).map_err(NetworkError::Consensus)?;
@@ -309,6 +325,7 @@ impl<H: Header> Message<H> {
                 Connection::Ping(_) => MessageCommand::Ping,
                 Connection::Pong(_) => MessageCommand::Pong,
                 Connection::WtxIdRelay => MessageCommand::WtxIdRelay,
+                Connection::Inv(_) => MessageCommand::Inv,
                 Connection::SendAddrV2 => MessageCommand::SendAddrV2,
                 Connection::SendCmpct(_) => MessageCommand::SendCmpct,
                 Connection::FeeFilter(_) => MessageCommand::FeeFilter,
@@ -379,6 +396,13 @@ pub enum Connection {
     /// relay. The message has no payload.
     WtxIdRelay,
 
+    /// Advertise known inventory (blocks, transactions, etc.).
+    ///
+    /// The inv message informs a peer about objects that this node has
+    /// available. The peer can then request these objects using a getdata
+    /// message.
+    Inv(Inv),
+
     /// Signal preference for addrv2 format (BIP 155).
     ///
     /// This message signals that the node wants to receive address messages in
@@ -410,6 +434,7 @@ impl Encodable for Connection {
             Connection::Ping(msg) => msg.consensus_encode(writer),
             Connection::Pong(msg) => msg.consensus_encode(writer),
             Connection::WtxIdRelay => Ok(0), // WtxIdRelay has no payload
+            Connection::Inv(msg) => msg.consensus_encode(writer),
             Connection::SendAddrV2 => Ok(0), // SendAddrV2 has no payload
             Connection::SendCmpct(msg) => msg.consensus_encode(writer),
             Connection::FeeFilter(msg) => msg.consensus_encode(writer),
@@ -575,5 +600,11 @@ impl<H: Header> From<Tx> for Response<H> {
 impl<H: Header> From<NotFound> for Response<H> {
     fn from(msg: NotFound) -> Self {
         Response::NotFound(msg)
+    }
+}
+
+impl From<Inv> for Connection {
+    fn from(msg: Inv) -> Self {
+        Connection::Inv(msg)
     }
 }

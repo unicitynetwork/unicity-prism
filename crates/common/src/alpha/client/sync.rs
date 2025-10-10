@@ -8,7 +8,7 @@ use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use primitive_types::U256;
@@ -22,16 +22,17 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
+use crate::alpha::client::Connection;
 use crate::alpha::{
     blockdata::block::{BlockHash, Header},
     client::{
         connection::{ConnectionError, ConnectionManager},
         database::{BlockDatabase, DatabaseError},
         message::{
-            Message, Request, Response,
-            get_data::{GetData, Inventory},
-            request::GetHeaders,
-            response::{Headers, StandardBlock},
+            get_data::{GetData, Inventory}, request::GetHeaders, response::{Headers, StandardBlock},
+            Message,
+            Request,
+            Response,
         },
     },
     consensus::Params,
@@ -625,12 +626,6 @@ impl BlockSynchronizer {
                         block_hash, block_height, block_type
                     );
                 }
-
-                // Update known hashes
-                {
-                    let mut known_hashes = self.known_block_hashes.write().await;
-                    known_hashes.insert(block_hash);
-                }
             }
 
             // Update progress
@@ -804,6 +799,14 @@ impl BlockSynchronizer {
                         info!("Cancellation detected during header request, stopping monitoring");
                         break;
                     }
+                    // Check if this is an "inv" command error
+                    if e.to_string().contains("Unknown command: inv") {
+                        // This is actually expected during normal operation
+                        // Just log it and continue monitoring
+                        debug!("Received inv message during monitoring (normal behavior)");
+                        consecutive_failures = 0;
+                        continue;
+                    }
                     warn!("Failed to check for new blocks: {}", e);
                     consecutive_failures += 1;
 
@@ -950,6 +953,15 @@ impl BlockSynchronizer {
                     debug!("Received {} headers", headers.len());
                     return Ok(headers);
                 }
+                Message::Connection(Connection::Inv(inv)) => {
+                    // Handle inv messages by logging and continuing
+                    debug!("Received inv message with {} items", inv.inventory().len());
+                    for inventory in inv.inventory().iter() {
+                        debug!("  Inventory item: {:?}", inventory);
+                    }
+                    // Continue waiting for headers
+                    continue;
+                }
                 Message::Response(Response::Block(_)) => {
                     // This might happen if the peer sends blocks instead of headers
                     warn!("Received block message while expecting headers");
@@ -1013,6 +1025,10 @@ impl BlockSynchronizer {
     where
         H: Header + Send + Sync + 'static + std::fmt::Debug,
     {
+        info!(
+            "STARTING BLOCK DOWNLOAD: Requesting {} blocks",
+            headers.len()
+        );
         debug!("Downloading {} blocks", headers.len());
 
         // Create inventory vectors for block requests
@@ -1026,6 +1042,7 @@ impl BlockSynchronizer {
             {
                 let known_hashes = self.known_block_hashes.read().await;
                 if known_hashes.contains(&block_hash) {
+                    debug!("Skipping already known block: {}", block_hash);
                     continue;
                 }
             }
@@ -1051,7 +1068,7 @@ impl BlockSynchronizer {
             .send_message(stream, Message::<H>::Request(Request::GetData(get_data)))
             .await?;
 
-        // Wait for block responses
+        // Wait for block responses with improved timeout handling
         let mut blocks_received: i32 = 0;
         let expected_blocks = block_hashes.len();
 
@@ -1066,7 +1083,37 @@ impl BlockSynchronizer {
             }
         };
 
+        // Add overall timeout for the entire download operation
+        let overall_timeout = Duration::from_secs(300); // 5 minutes for 2000 blocks
+        let download_start = Instant::now();
+
+        // Add progress logging
+        let mut last_progress_log = Instant::now();
+        let progress_log_interval = Duration::from_secs(10);
+
+        // Add a watchdog to detect stalled downloads
+        let mut last_block_received = Instant::now();
+        let watchdog_timeout = Duration::from_secs(60); // 1 minute without progress
+
         loop {
+            // Check for overall timeout
+            if download_start.elapsed() > overall_timeout {
+                warn!(
+                    "Block download timeout after {:?}",
+                    download_start.elapsed()
+                );
+                break;
+            }
+
+            // Check for watchdog timeout (no blocks received for too long)
+            if blocks_received > 0 && last_block_received.elapsed() > watchdog_timeout {
+                warn!(
+                    "No blocks received for {:?}, continuing with what we have",
+                    last_block_received.elapsed()
+                );
+                break;
+            }
+
             // Check for shutdown at the beginning of each iteration
             if self.is_cancelled() {
                 info!("Cancellation detected at start of block download loop");
@@ -1079,9 +1126,25 @@ impl BlockSynchronizer {
                 break;
             }
 
-            let message = match connection.receive_message::<H>(stream).await {
-                Ok(msg) => msg,
-                Err(e) => {
+            // Log progress periodically
+            if last_progress_log.elapsed() > progress_log_interval {
+                info!(
+                    "Block download progress: {}/{} blocks received ({:.1}%)",
+                    blocks_received,
+                    expected_blocks_i32,
+                    (blocks_received as f64 / expected_blocks_i32 as f64) * 100.0
+                );
+                last_progress_log = Instant::now();
+            }
+
+            // Add a per-block timeout to prevent hanging on individual blocks
+            let block_timeout = Duration::from_secs(30);
+            let message_result =
+                tokio::time::timeout(block_timeout, connection.receive_message::<H>(stream)).await;
+
+            let message = match message_result {
+                Ok(Ok(msg)) => msg,
+                Ok(Err(e)) => {
                     if self.is_cancelled() {
                         info!("Cancellation detected during message receive, stopping download");
                         break;
@@ -1089,11 +1152,20 @@ impl BlockSynchronizer {
                     error!("Failed to receive message: {}", e);
                     return Err(e);
                 }
+                Err(_) => {
+                    warn!("Timeout waiting for block response, continuing with next block");
+                    // Count as processed to avoid infinite loop, but continue
+                    blocks_received = blocks_received.saturating_add(1);
+                    continue;
+                }
             };
 
             match message {
                 Message::Response(Response::Block(block)) => {
                     let block_hash = block.header().block_hash();
+
+                    // Update the watchdog time since we received a block
+                    last_block_received = Instant::now();
 
                     // Check if this is one of the blocks we requested
                     if block_hashes.contains(&block_hash) {
@@ -1170,6 +1242,27 @@ impl BlockSynchronizer {
                         warn!("Received unexpected block: {}", block_hash);
                     }
                 }
+                Message::Connection(Connection::Inv(inv)) => {
+                    // Handle inv messages by logging and continuing
+                    debug!(
+                        "Received inv message with {} items during block download",
+                        inv.inventory().len()
+                    );
+
+                    // Check if any of these inv items are blocks we're waiting for
+                    for inventory in inv.inventory().iter() {
+                        if let Inventory::Block(block_hash) = inventory {
+                            if block_hashes.contains(block_hash) {
+                                debug!(
+                                    "Peer announced block {} via inv, waiting for direct response",
+                                    block_hash
+                                );
+                            }
+                        }
+                    }
+                    // Continue waiting for blocks
+                    continue;
+                }
                 Message::Response(Response::NotFound(not_found)) => {
                     // Handle case where peer doesn't have the block
                     warn!("Peer doesn't have requested block(s): {:?}", not_found);
@@ -1178,7 +1271,7 @@ impl BlockSynchronizer {
                 _ => {
                     debug!(
                         "Received non-block message during block download: {:?}",
-                        message
+                        message.command()
                     );
                     continue;
                 }
@@ -1191,6 +1284,10 @@ impl BlockSynchronizer {
             }
         }
 
+        info!(
+            "COMPLETED BLOCK DOWNLOAD: Received {} out of {} requested blocks",
+            blocks_received, expected_blocks
+        );
         debug!("Downloaded {} blocks", blocks_received);
         Ok(blocks_received as usize)
     }
