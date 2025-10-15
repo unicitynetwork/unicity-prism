@@ -294,6 +294,13 @@ impl BlockSynchronizer {
                     .await
                     .map_err(|e| ConnectionError::Io(std::io::Error::other(e)))?;
 
+                // Explicitly add the genesis block to the chain state
+                if let Err(e) = db.add_block_to_state(genesis_hash, 0).await {
+                    error!("Failed to add genesis block to chain state: {}", e);
+                } else {
+                    info!("Genesis block added to chain state");
+                }
+
                 info!("Genesis block set as chain tip");
             } else {
                 info!("Genesis block already exists in database");
@@ -322,6 +329,18 @@ impl BlockSynchronizer {
                 "Loaded chain state from database: tip height {}",
                 state.tip_height
             );
+
+            // Ensure genesis block is in chain state
+            let genesis_hash = self.genesis_hash();
+            if database.get_block_height(&genesis_hash).await.unwrap_or(None).is_none() {
+                // Genesis block is not in chain state, add it
+                info!("Genesis block not found in chain state, adding it");
+                if let Err(e) = database.add_block_to_state(genesis_hash, 0).await {
+                    error!("Failed to add genesis block to chain state: {}", e);
+                } else {
+                    info!("Genesis block added to chain state");
+                }
+            }
         } else {
             // Fallback to JSON if database is not available
             if let Some(data_dir) = &self.config.data_dir {
@@ -520,6 +539,12 @@ impl BlockSynchronizer {
                                 if let Err(e) = db.set_chain_tip(genesis_hash, 0).await {
                                     error!("Failed to set genesis as chain tip: {}", e);
                                 } else {
+                                    // Explicitly add the genesis block to the chain state
+                                    if let Err(e) = db.add_block_to_state(genesis_hash, 0).await {
+                                        error!("Failed to add genesis block to chain state: {}", e);
+                                    } else {
+                                        info!("Genesis block added to chain state");
+                                    }
                                     info!("Genesis block set as chain tip");
                                 }
                             }
@@ -1226,6 +1251,12 @@ impl BlockSynchronizer {
         );
         debug!("Downloading {} blocks", headers.len());
 
+        // Clear known_block_hashes to prevent stale entries from previous batches
+        {
+            let mut known_hashes = self.known_block_hashes.write().await;
+            known_hashes.clear();
+        }
+
         // Configuration for batch processing to handle peer limitations
         const MAX_BLOCKS_PER_REQUEST: usize = 25; // Conservative limit based on Bitcoin Core defaults
         const BATCH_TIMEOUT: Duration = Duration::from_secs(30); // Timeout per batch
@@ -1567,24 +1598,24 @@ impl BlockSynchronizer {
             // Process the selected block
             if let Some(block_hash) = next_block_hash {
                 if let Some(buffered_block) = buffered_blocks.remove(&block_hash) {
-                    // Validate and process the block
+                    // First, store the block in database (without validation)
+                    if let Some(database) = &self.database {
+                        if let Err(e) = database.store_block(&buffered_block.block).await {
+                            error!("Failed to store block in database: {}", e);
+                            // Continue processing even if storage fails
+                        }
+
+                        // Store the header as well for efficient lookup
+                        if let Err(e) =
+                            database.store_header(buffered_block.block.header()).await
+                        {
+                            error!("Failed to store header in database: {}", e);
+                        }
+                    }
+
+                    // Then validate the block
                     match self.process_block(buffered_block.block.clone()).await {
                         Ok(()) => {
-                            // Store the block in database
-                            if let Some(database) = &self.database {
-                                if let Err(e) = database.store_block(&buffered_block.block).await {
-                                    error!("Failed to store block in database: {}", e);
-                                    // Continue processing even if storage fails
-                                }
-
-                                // Store the header as well for efficient lookup
-                                if let Err(e) =
-                                    database.store_header(buffered_block.block.header()).await
-                                {
-                                    error!("Failed to store header in database: {}", e);
-                                }
-                            }
-
                             // Update the chain tip to this block
                             let expected_height =
                                 current_tip_height.checked_add(1).unwrap_or_else(|| {
@@ -1617,6 +1648,12 @@ impl BlockSynchronizer {
                         }
                         Err(e) => {
                             error!("Failed to process block {}: {}", block_hash, e);
+                            // Remove the block from database if validation failed
+                            if let Some(database) = &self.database {
+                                if let Err(db_err) = database.remove_block(&block_hash).await {
+                                    error!("Failed to remove invalid block from database: {}", db_err);
+                                }
+                            }
                             // Continue with other blocks even if one fails
                         }
                     }

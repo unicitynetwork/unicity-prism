@@ -448,6 +448,53 @@ impl BlockDatabase {
         Ok(true)
     }
 
+    /// Removes a block from the database.
+    pub async fn remove_block(&self, block_hash: &BlockHash) -> DatabaseResult<()> {
+        let hash_bytes = block_hash.to_byte_array();
+
+        let write_txn = self.db.begin_write()?;
+        {
+            // Remove from blocks table
+            let mut blocks_table = write_txn.open_table(BLOCKS_TABLE)?;
+            blocks_table.remove(&hash_bytes[..])?;
+
+            // Remove from headers table
+            let mut headers_table = write_txn.open_table(HEADERS_TABLE)?;
+            headers_table.remove(&hash_bytes[..])?;
+
+            // Remove from chain state if present
+            let mut state = self.get_chain_state().await?;
+
+            // Check if block exists in state and get its height
+            if let Some(height) = state.block_heights.remove(block_hash) {
+                // Remove from height_hashes mapping
+                state.height_hashes.remove(&height);
+
+                // Update tip if this was the tip
+                if state.tip_hash == *block_hash {
+                    // Find the new highest block
+                    if let Some((&new_height, &new_hash)) =
+                        state.height_hashes.iter().max_by_key(|(height, _)| *height)
+                    {
+                        state.tip_hash = new_hash;
+                        state.tip_height = new_height;
+                    } else {
+                        // No blocks left, reset to genesis
+                        state.tip_hash = BlockHash::all_zeros();
+                        state.tip_height = 0;
+                    }
+                }
+
+                // Store updated state
+                self.store_chain_state(&state).await?;
+            }
+        }
+        write_txn.commit()?;
+
+        debug!("Removed block: {}", block_hash);
+        Ok(())
+    }
+
     /// Migrates data from JSON files to the database.
     pub async fn migrate_from_json<P: AsRef<Path>>(&self, data_dir: P) -> DatabaseResult<()> {
         let data_dir = data_dir.as_ref();
