@@ -28,15 +28,15 @@ use crate::alpha::{
         genesis::GenesisInfo,
     },
     client::{
-        Connection,
         connection::{ConnectionError, ConnectionManager},
         database::BlockDatabase,
         message::{
-            Message, Request, Response,
-            get_data::{GetData, Inventory},
-            request::GetHeaders,
-            response::{Headers, StandardBlock},
+            get_data::{GetData, Inventory}, request::GetHeaders, response::{Headers, StandardBlock},
+            Message,
+            Request,
+            Response,
         },
+        Connection,
     },
     consensus::Params,
     hashes::Hash,
@@ -266,6 +266,32 @@ impl BlockSynchronizer {
                     .map_err(|e| ConnectionError::Io(std::io::Error::other(e)))?,
             );
 
+            // Get the appropriate genesis block for the current network
+            let genesis_block = GenesisInfo::for_network(self.config.network).to_block();
+            let genesis_hash = genesis_block.header().block_hash();
+            
+            // Store the genesis block in the database if it doesn't already exist
+            if !db.block_exists(&genesis_hash).await.map_err(|e| ConnectionError::Io(std::io::Error::other(e)))? {
+                info!("Storing genesis block for {} network", self.config.network.as_str());
+                
+                // Convert the genesis block to a StandardBlock for storage
+                let standard_genesis = StandardBlock::new(
+                    genesis_block.header,
+                    genesis_block.transactions,
+                );
+                
+                db.store_block(&standard_genesis).await
+                    .map_err(|e| ConnectionError::Io(std::io::Error::other(e)))?;
+                
+                // Set the chain tip to the genesis block
+                db.set_chain_tip(genesis_hash, 0).await
+                    .map_err(|e| ConnectionError::Io(std::io::Error::other(e)))?;
+                
+                info!("Genesis block set as chain tip");
+            } else {
+                info!("Genesis block already exists in database");
+            }
+
             // Migrate from JSON if needed
             db.migrate_from_json(data_dir)
                 .await
@@ -461,6 +487,34 @@ impl BlockSynchronizer {
                         // Note: This is a workaround since we can't modify self in this context
                         // In a proper implementation, you'd restructure this to avoid this issue
                         info!("Database available at: {}", db_path.display());
+
+                        // Get the appropriate genesis block for the current network
+                        let genesis_block = GenesisInfo::for_network(self.config.network).to_block();
+                        let genesis_hash = genesis_block.header().block_hash();
+                        
+                        // Store the genesis block in the database if it doesn't already exist
+                        if !db.block_exists(&genesis_hash).await.unwrap_or(false) {
+                            info!("Storing genesis block for {} network", self.config.network.as_str());
+                            
+                            // Convert the genesis block to a StandardBlock for storage
+                            let standard_genesis = StandardBlock::new(
+                                genesis_block.header,
+                                genesis_block.transactions,
+                            );
+                            
+                            if let Err(e) = db.store_block(&standard_genesis).await {
+                                error!("Failed to store genesis block: {}", e);
+                            } else {
+                                // Set the chain tip to the genesis block
+                                if let Err(e) = db.set_chain_tip(genesis_hash, 0).await {
+                                    error!("Failed to set genesis as chain tip: {}", e);
+                                } else {
+                                    info!("Genesis block set as chain tip");
+                                }
+                            }
+                        } else {
+                            info!("Genesis block already exists in database");
+                        }
 
                         // Migrate from JSON if needed
                         if let Err(e) = db.migrate_from_json(data_dir).await {
@@ -764,13 +818,12 @@ impl BlockSynchronizer {
                     u64::MAX
                 });
 
-                current_tip_height = match current_tip_height.checked_add(headers_count_u64) {
-                    Some(height) => height,
-                    None => {
+                current_tip_height = current_tip_height
+                    .checked_add(headers_count_u64)
+                    .unwrap_or_else(|| {
                         error!("Current tip height calculation would overflow, using max value");
                         u64::MAX
-                    }
-                };
+                    });
             }
 
             // Save state periodically
@@ -857,13 +910,10 @@ impl BlockSynchronizer {
             }
 
             // Use a timeout for the interval tick to prevent hanging
-            let timeout_seconds = match self.config.sync_interval.checked_add(5) {
-                Some(seconds) => seconds,
-                None => {
-                    error!("Timeout calculation would overflow, using max value");
-                    u64::MAX
-                }
-            };
+            let timeout_seconds = self.config.sync_interval.checked_add(5).unwrap_or_else(|| {
+                error!("Timeout calculation would overflow, using max value");
+                u64::MAX
+            });
             match tokio::time::timeout(Duration::from_secs(timeout_seconds), async {
                 interval.tick().await;
             })
@@ -949,25 +999,20 @@ impl BlockSynchronizer {
                     }
 
                     let block_hash = header.block_hash();
-                    let block_height = match current_tip_height.checked_add(1) {
-                        Some(height) => height,
-                        None => {
-                            error!("Current tip height + 1 would overflow, using max value");
-                            u64::MAX
-                        }
-                    };
+                    let block_height = current_tip_height.checked_add(1).unwrap_or_else(|| {
+                        error!("Current tip height + 1 would overflow, using max value");
+                        u64::MAX
+                    });
 
-                    let block_height =
-                        match block_height.checked_add(u64::try_from(i).unwrap_or_else(|_| {
+                    let block_height = block_height
+                        .checked_add(u64::try_from(i).unwrap_or_else(|_| {
                             error!("Failed to convert index {} to u64, using max value", i);
                             u64::MAX
-                        })) {
-                            Some(height) => height,
-                            None => {
-                                error!("Block height calculation would overflow, using max value");
-                                u64::MAX
-                            }
-                        };
+                        }))
+                        .unwrap_or_else(|| {
+                            error!("Block height calculation would overflow, using max value");
+                            u64::MAX
+                        });
 
                     // Get consensus parameters to check for hard fork
                     let params = self.consensus_params();
@@ -1650,13 +1695,10 @@ impl BlockSynchronizer {
 
         // Get the expected block height
         let expected_height = match self.get_block_height(&header.previous_block_hash()).await {
-            Some(height) => match height.checked_add(1) {
-                Some(new_height) => new_height,
-                None => {
-                    error!("Height calculation would overflow, using max value");
-                    u64::MAX
-                }
-            },
+            Some(height) => height.checked_add(1).unwrap_or_else(|| {
+                error!("Height calculation would overflow, using max value");
+                u64::MAX
+            }),
             None => {
                 // This might be the genesis block, or we don't have the parent
                 if header.previous_block_hash() == BlockHash::all_zeros() {
