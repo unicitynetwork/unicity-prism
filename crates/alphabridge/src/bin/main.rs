@@ -407,23 +407,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Handle termination signal (for systemd, docker, etc.)
     let term_token = cancel_token.clone();
     tokio::spawn(async move {
-        #[cfg(unix)]
-        {
-            use tokio::signal::unix::{signal, SignalKind};
-            match signal(SignalKind::terminate()) {
-                Ok(mut sigterm) => {
-                    sigterm.recv().await;
-                    warn!("Received SIGTERM, initiating shutdown...");
-                    term_token.cancel();
-                }
-                Err(e) => {
-                    error!("Failed to setup SIGTERM handler: {}", e);
-                }
+        use tokio::signal::unix::{signal, SignalKind};
+        match signal(SignalKind::terminate()) {
+            Ok(mut sigterm) => {
+                sigterm.recv().await;
+                warn!("Received SIGTERM, initiating shutdown...");
+                term_token.cancel();
             }
-        }
-        #[cfg(not(unix))]
-        {
-            // On Windows, we only have Ctrl+C handling
+            Err(e) => {
+                error!("Failed to setup SIGTERM handler: {}", e);
+            }
         }
     });
 
