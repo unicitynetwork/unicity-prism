@@ -1970,7 +1970,7 @@ impl BlockSynchronizer {
                             0
                         }
                     };
-                    if reorg_depth > 0 {
+                    if reorg_depth > 0 && header.block_hash() != current_tip_hash {
                         return Ok(Some(ReorgInfo {
                             common_ancestor_height: fork_height,
                             common_ancestor_hash: fork_hash,
