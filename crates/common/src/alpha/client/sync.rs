@@ -169,6 +169,7 @@ pub struct BlockSynchronizer {
     database: Option<Arc<BlockDatabase>>,
     known_block_hashes: Arc<RwLock<HashSet<BlockHash>>>,
     cancel_token: CancellationToken,
+    session_start_height: Arc<RwLock<u64>>,
 }
 
 impl BlockSynchronizer {
@@ -189,6 +190,7 @@ impl BlockSynchronizer {
             database: None,
             known_block_hashes: Arc::new(RwLock::new(HashSet::new())),
             cancel_token: CancellationToken::new(),
+            session_start_height: Arc::new(RwLock::new(0)),
         }
     }
 
@@ -249,6 +251,7 @@ impl BlockSynchronizer {
             database: Some(database),
             known_block_hashes: Arc::new(RwLock::new(HashSet::new())),
             cancel_token: CancellationToken::new(),
+            session_start_height: Arc::new(RwLock::new(0)),
         }
     }
 
@@ -332,7 +335,12 @@ impl BlockSynchronizer {
 
             // Ensure genesis block is in chain state
             let genesis_hash = self.genesis_hash();
-            if database.get_block_height(&genesis_hash).await.unwrap_or(None).is_none() {
+            if database
+                .get_block_height(&genesis_hash)
+                .await
+                .unwrap_or(None)
+                .is_none()
+            {
                 // Genesis block is not in chain state, add it
                 info!("Genesis block not found in chain state, adding it");
                 if let Err(e) = database.add_block_to_state(genesis_hash, 0).await {
@@ -611,8 +619,6 @@ impl BlockSynchronizer {
             progress.last_known_height = peer_best_height;
         }
 
-        // Get current chain tip
-        let (current_tip_hash, current_tip_height) = self.get_chain_tip().await;
         info!(
             "Current chain tip: height {}, hash: {}",
             current_tip_height, current_tip_hash
@@ -727,6 +733,12 @@ impl BlockSynchronizer {
 
             // Process each header
             for (i, header) in headers.headers().iter().enumerate() {
+                // Check for cancellation during header processing
+                if self.is_cancelled() {
+                    info!("Cancellation detected during header processing");
+                    break;
+                }
+
                 let block_hash = header.block_hash();
                 let block_height = current_tip_height.checked_add(1).unwrap_or_else(|| {
                     error!("Current tip height + 1 would overflow, using max value");
@@ -842,7 +854,13 @@ impl BlockSynchronizer {
             }
 
             // Download full blocks if requested
-            if self.config.download_full_blocks && !self.is_cancelled() {
+            if self.config.download_full_blocks {
+                // Check for cancellation before downloading blocks
+                if self.is_cancelled() {
+                    info!("Cancellation detected before block download");
+                    break;
+                }
+
                 match self
                     .download_blocks::<H>(connection, stream, headers.headers())
                     .await
@@ -886,9 +904,24 @@ impl BlockSynchronizer {
                 self.save_state().await?;
             }
 
-            // Check if we've reached our limit
-            if total_headers_synced >= self.config.max_blocks_to_download {
-                info!("Reached maximum block limit, stopping synchronization");
+            // Check if we've reached our limit for this session
+            let session_start_height = *self.session_start_height.read().await;
+            let blocks_synced_this_session = if current_tip_height >= session_start_height {
+                current_tip_height
+                    .checked_sub(session_start_height)
+                    .unwrap_or_else(|| {
+                        error!("Height calculation would underflow, using 0");
+                        0
+                    })
+            } else {
+                0
+            };
+
+            if blocks_synced_this_session >= self.config.max_blocks_to_download as u64 {
+                info!(
+                    "Reached maximum block limit for this session ({} blocks), stopping synchronization",
+                    self.config.max_blocks_to_download
+                );
                 break;
             }
         }
@@ -923,13 +956,10 @@ impl BlockSynchronizer {
             if let Some(hash) = self.get_block_hash_at_height(height).await {
                 locators.push(hash);
             }
-            step = match step.checked_mul(2) {
-                Some(new_step) => new_step,
-                None => {
-                    error!("Step calculation would overflow, using max value");
-                    u64::MAX
-                }
-            };
+            step = step.checked_mul(2).unwrap_or_else(|| {
+                error!("Step calculation would overflow, using max value");
+                u64::MAX
+            });
         }
 
         // Always include genesis hash
@@ -1162,6 +1192,14 @@ impl BlockSynchronizer {
     {
         debug!("Requesting headers with {} locators", locator_hashes.len());
 
+        // Check for cancellation before creating the message
+        if self.is_cancelled() {
+            info!("Cancellation detected before creating getheaders message");
+            return Err(ConnectionError::InvalidMessage(
+                "Operation cancelled".to_string(),
+            ));
+        }
+
         // Create GetHeaders message
         let get_headers = GetHeaders::new(
             70016, // Protocol version
@@ -1179,7 +1217,31 @@ impl BlockSynchronizer {
 
         // Wait for Headers response
         loop {
-            let message = connection.receive_message::<H>(stream).await?;
+            // Check for cancellation before receiving a message
+            if self.is_cancelled() {
+                info!("Cancellation detected while waiting for headers response");
+                return Err(ConnectionError::InvalidMessage(
+                    "Operation cancelled".to_string(),
+                ));
+            }
+
+            // Use a timeout for the receive operation to make it cancellation-aware
+            let message = match tokio::time::timeout(
+                self.config.request_timeout,
+                connection.receive_message::<H>(stream),
+            )
+            .await
+            {
+                Ok(Ok(msg)) => msg,
+                Ok(Err(e)) => {
+                    error!("Failed to receive message: {}", e);
+                    return Err(e);
+                }
+                Err(_) => {
+                    // Continue waiting
+                    continue;
+                }
+            };
 
             match message {
                 Message::Response(Response::Headers(headers)) => {
@@ -1225,6 +1287,14 @@ impl BlockSynchronizer {
         let mut last_error = None;
 
         for attempt in 1..=self.config.max_retries {
+            // Check for cancellation before each retry attempt
+            if self.is_cancelled() {
+                info!("Cancellation detected before retry attempt {}", attempt);
+                return Err(ConnectionError::InvalidMessage(
+                    "Operation cancelled".to_string(),
+                ));
+            }
+
             match self
                 .request_headers::<H>(connection, stream, locator_hashes.clone(), stop_hash)
                 .await
@@ -1235,6 +1305,14 @@ impl BlockSynchronizer {
                     last_error = Some(e);
 
                     if attempt < self.config.max_retries {
+                        // Check for cancellation before sleeping
+                        if self.is_cancelled() {
+                            info!("Cancellation detected before retry delay");
+                            return Err(ConnectionError::InvalidMessage(
+                                "Operation cancelled".to_string(),
+                            ));
+                        }
+
                         let delay = Duration::from_secs(match 2u32.checked_pow(attempt.min(5)) {
                             Some(delay) => u64::from(delay),
                             None => {
@@ -1243,7 +1321,19 @@ impl BlockSynchronizer {
                             }
                         });
                         info!("Retrying in {} seconds...", delay.as_secs());
-                        sleep(delay).await;
+
+                        // Use a cancellation-aware sleep
+                        tokio::select! {
+                            _ = sleep(delay) => {
+                                // Sleep completed normally
+                            }
+                            _ = self.cancel_token.cancelled() => {
+                                info!("Cancellation detected during retry delay");
+                                return Err(ConnectionError::InvalidMessage(
+                                    "Operation cancelled".to_string(),
+                                ));
+                            }
+                        }
                     }
                 }
             }
@@ -1625,9 +1715,7 @@ impl BlockSynchronizer {
                         }
 
                         // Store the header as well for efficient lookup
-                        if let Err(e) =
-                            database.store_header(buffered_block.block.header()).await
-                        {
+                        if let Err(e) = database.store_header(buffered_block.block.header()).await {
                             error!("Failed to store header in database: {}", e);
                         }
                     }
@@ -1670,7 +1758,10 @@ impl BlockSynchronizer {
                             // Remove the block from database if validation failed
                             if let Some(database) = &self.database {
                                 if let Err(db_err) = database.remove_block(&block_hash).await {
-                                    error!("Failed to remove invalid block from database: {}", db_err);
+                                    error!(
+                                        "Failed to remove invalid block from database: {}",
+                                        db_err
+                                    );
                                 }
                             }
                             // Continue with other blocks even if one fails
@@ -1821,13 +1912,10 @@ impl BlockSynchronizer {
             .as_secs();
 
         let header_timestamp = u64::from(header.timestamp());
-        let future_limit = match current_time.checked_add(2 * 3600) {
-            Some(limit) => limit,
-            None => {
-                error!("Future time calculation would overflow, using max value");
-                u64::MAX
-            }
-        };
+        let future_limit = current_time.checked_add(2 * 3600).unwrap_or_else(|| {
+            error!("Future time calculation would overflow, using max value");
+            u64::MAX
+        });
 
         if header_timestamp > future_limit {
             // Allow 2 hours in the future
@@ -1888,18 +1976,18 @@ impl BlockSynchronizer {
         if height >= randomx_height {
             // If RandomX is enforced, reject any non-RandomX blocks
             let randomx_enforcement_height = params.randomx_enforcement_height;
-            if height >= randomx_enforcement_height {
+            return if height >= randomx_enforcement_height {
                 // Check if this is a RandomX block by looking at the header size
                 // RandomX headers are 112 bytes vs 80 bytes for Bitcoin headers
                 if H::SIZE == 112 {
                     debug!("Validating RandomX block at height {}", height);
-                    return self.validate_pow::<H>(header).await;
+                    self.validate_pow::<H>(header).await
                 } else {
                     warn!(
                         "Rejecting non-RandomX block at height {} (RandomX enforcement active)",
                         height
                     );
-                    return Ok(false);
+                    Ok(false)
                 }
             } else {
                 // During transition period, accept both types
@@ -1907,8 +1995,8 @@ impl BlockSynchronizer {
                     "Validating block during RandomX transition at height {}",
                     height
                 );
-                return self.validate_pow::<H>(header).await;
-            }
+                self.validate_pow::<H>(header).await
+            };
         }
 
         self.validate_pow::<H>(header).await
@@ -1982,13 +2070,13 @@ impl BlockSynchronizer {
                     && hash_at_height == fork_hash
                 {
                     // Found common ancestor
-                    let reorg_depth = match current_tip_height.checked_sub(fork_height) {
-                        Some(depth) => depth,
-                        None => {
-                            error!("Reorg depth calculation would underflow, using 0");
-                            0
-                        }
-                    };
+                    let reorg_depth =
+                        current_tip_height
+                            .checked_sub(fork_height)
+                            .unwrap_or_else(|| {
+                                error!("Reorg depth calculation would underflow, using 0");
+                                0
+                            });
                     if reorg_depth > 0 && header.block_hash() != current_tip_hash {
                         return Ok(Some(ReorgInfo {
                             common_ancestor_height: fork_height,
@@ -1996,16 +2084,13 @@ impl BlockSynchronizer {
                             old_tip_hash: current_tip_hash,
                             old_tip_height: current_tip_height,
                             new_tip_hash: header.block_hash(),
-                            new_tip_height: match prev_height.checked_add(1) {
-                                Some(new_height) => new_height,
-                                None => {
-                                    error!(
-                                        "New tip height calculation would overflow, using max \
+                            new_tip_height: prev_height.checked_add(1).unwrap_or_else(|| {
+                                error!(
+                                    "New tip height calculation would overflow, using max \
                                          value"
-                                    );
-                                    u64::MAX
-                                }
-                            },
+                                );
+                                u64::MAX
+                            }),
                             reorg_depth,
                         }));
                     }
@@ -2017,13 +2102,10 @@ impl BlockSynchronizer {
                     .await
                 {
                     fork_hash = prev_header.previous_block_hash();
-                    fork_height = match fork_height.checked_sub(1) {
-                        Some(new_height) => new_height,
-                        None => {
-                            error!("Fork height calculation would underflow, using 0");
-                            0
-                        }
-                    };
+                    fork_height = fork_height.checked_sub(1).unwrap_or_else(|| {
+                        error!("Fork height calculation would underflow, using 0");
+                        0
+                    });
                 } else {
                     break;
                 }
