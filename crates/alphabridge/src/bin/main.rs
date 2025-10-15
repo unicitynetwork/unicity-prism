@@ -172,7 +172,7 @@ fn get_default_peers(network: Network) -> Vec<SocketAddr> {
 /// Connects to a peer and performs synchronization.
 async fn connect_and_sync(
     connection_manager: &ConnectionManager,
-    handshake_handler: &HandshakeHandler,
+    handshake_handler: &mut HandshakeHandler,
     block_synchronizer: &BlockSynchronizer,
     peer_addr: SocketAddr,
 ) -> Result<(), ConnectionError> {
@@ -204,8 +204,17 @@ async fn connect_and_sync(
     let mut stream = connection_manager.connect(peer_addr).await?;
     info!("Successfully connected to peer: {}", peer_addr);
 
+    // Get current chain height to use in handshake
+    let (_, current_height) = block_synchronizer.get_chain_tip().await;
+    let current_height_i32 = i32::try_from(current_height).unwrap_or(i32::MAX);
+
+    handshake_handler.set_start_height(current_height_i32);
+
     // Perform handshake
-    debug!("Starting handshake with peer: {}", peer_addr);
+    debug!(
+        "Starting handshake with peer: {} (using start_height: {})",
+        peer_addr, current_height_i32
+    );
     let peer_info = handshake_handler
         .perform_handshake::<BitcoinHeader>(connection_manager, &mut stream, peer_addr)
         .await?;
@@ -275,7 +284,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Creating handshake handler with services: {:?}",
         ServiceFlags::NONE
     );
-    let handshake_handler = HandshakeHandler::new(
+    let mut handshake_handler = HandshakeHandler::new(
         args.user_agent.clone(),
         i32::try_from(args.start_height).unwrap_or(0),
     )
@@ -400,7 +409,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move {
         #[cfg(unix)]
         {
-            use tokio::signal::unix::{SignalKind, signal};
+            use tokio::signal::unix::{signal, SignalKind};
             match signal(SignalKind::terminate()) {
                 Ok(mut sigterm) => {
                     sigterm.recv().await;
@@ -434,7 +443,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match connect_and_sync(
             &connection_manager,
-            &handshake_handler,
+            &mut handshake_handler,
             &block_synchronizer,
             *peer_addr,
         )
@@ -448,6 +457,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if args.continuous_sync {
                     match connection_manager.connect(*peer_addr).await {
                         Ok(mut stream) => {
+                            // Get current chain height again for the reconnection
+                            let (_, current_height) = block_synchronizer.get_chain_tip().await;
+                            let current_height_i32 =
+                                i32::try_from(current_height).unwrap_or(i32::MAX);
+
+                            handshake_handler.set_start_height(current_height_i32);
+
                             if let Ok(peer_info) = handshake_handler
                                 .perform_handshake::<BitcoinHeader>(
                                     &connection_manager,

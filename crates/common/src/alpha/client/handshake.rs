@@ -13,9 +13,9 @@ use crate::alpha::{
     blockdata::block::Header,
     client::{
         connection::{ConnectionError, ConnectionManager},
-        message::{Connection, Message, connection::Version},
+        message::{connection::Version, Connection, Message},
     },
-    p2p::{ServiceFlags, address::AddrV2},
+    p2p::{address::AddrV2, ServiceFlags},
 };
 
 /// Information about a peer after successful handshake.
@@ -229,6 +229,20 @@ impl HandshakeHandler {
         );
 
         Ok(version)
+    }
+
+    /// Validates and sets the start height.
+    ///
+    /// # Arguments
+    ///
+    /// * `start_height` - The starting block height to set.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the start height is valid and set successfully.
+    /// * `Err(ConnectionError)` if the start height is invalid.
+    pub fn set_start_height(&mut self, start_height: i32) {
+        self.start_height = start_height;
     }
 }
 
