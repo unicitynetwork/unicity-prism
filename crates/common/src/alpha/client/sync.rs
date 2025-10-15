@@ -1863,9 +1863,6 @@ impl BlockSynchronizer {
     where
         H: Header + Send + Sync + 'static,
     {
-        // For Alpha chain, we would implement RandomX validation here
-        // For now, we'll just check that the hash is below the target difficulty
-
         let block_hash = header.block_hash();
         let target = match header.target() {
             Some(target) => target,
@@ -1875,11 +1872,22 @@ impl BlockSynchronizer {
             }
         };
 
-        // Check if block hash is below target
-        let hash_value = U256::from_big_endian(block_hash.to_byte_array().as_ref());
-        let target_value = target.as_u256(); // Use the public getter method
-
-        Ok(hash_value <= target_value)
+        // Use the header's own validate_pow method instead of implementing our own
+        match header.validate_pow(target) {
+            Ok(hash) => {
+                // Verify that the returned hash matches the block hash
+                if hash == block_hash {
+                    Ok(true)
+                } else {
+                    error!("Header validation returned a different hash than expected");
+                    Ok(false)
+                }
+            }
+            Err(e) => {
+                error!("Proof of work validation failed: {:?}", e);
+                Ok(false)
+            }
+        }
     }
 
     /// Checks if a new block causes a chain reorganization.
