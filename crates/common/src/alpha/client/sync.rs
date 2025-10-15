@@ -502,6 +502,25 @@ impl BlockSynchronizer {
             peer_best_height
         );
 
+        // Reset progress counters at the beginning of each sync session
+        {
+            let mut progress = self.progress.write().await;
+            progress.headers_synced = 0;
+            progress.blocks_downloaded = 0;
+            progress.is_complete = false;
+            progress.sync_rate = 0.0;
+            progress.eta_seconds = None;
+            debug!("Reset progress counters for new sync session");
+        }
+
+        // Get current chain tip to set session start height
+        let (current_tip_hash, current_tip_height) = self.get_chain_tip().await;
+        {
+            let mut session_start_height = self.session_start_height.write().await;
+            *session_start_height = current_tip_height;
+            debug!("Set session start height to {}", current_tip_height);
+        }
+
         // Initialize database if needed
         if self.database.is_none() {
             // We need to create a mutable reference, but we're in an async context
