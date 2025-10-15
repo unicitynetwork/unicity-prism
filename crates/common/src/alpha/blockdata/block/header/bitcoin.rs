@@ -6,7 +6,7 @@
 //! Unicity Alpha network.
 
 pub use bitcoin::blockdata::block::Header as InnerHeader;
-use bitcoin::{BlockHash, block::ValidationError};
+use bitcoin::{block::ValidationError, BlockHash};
 use serde::{Deserialize, Serialize};
 use unicity_prism_derive::ConsensusCodec;
 
@@ -28,7 +28,7 @@ use crate::alpha::{blockdata::block::header::Header, pow::Target};
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ConsensusCodec,
 )]
-pub struct BitcoinHeader(InnerHeader);
+pub struct BitcoinHeader(pub(crate) InnerHeader);
 
 impl Header for BitcoinHeader {
     /// The size of a Bitcoin block header in bytes.
@@ -116,7 +116,7 @@ impl From<InnerHeader> for BitcoinHeader {
 
 #[cfg(test)]
 mod tests {
-    use bitcoin::{TxMerkleNode, block::Version, hashes::Hash};
+    use bitcoin::{block::Version, hashes::Hash, TxMerkleNode};
     use hex::FromHex;
 
     use super::*;

@@ -2,7 +2,12 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::alpha::blockdata::block::{BitcoinHeader, Block};
 use crate::alpha::{blockdata::block::BlockHash, hashes::Hash, network::Network};
+use bitcoin::{
+    block::Header as InnerHeader, block::Version, BlockHash as BitcoinBlockHash, CompactTarget,
+    TxMerkleNode,
+};
 
 /// Genesis block information for different networks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,11 +104,43 @@ impl GenesisInfo {
             version: 1,
         }
     }
+
+    /// Creates a BitcoinHeader from the genesis block information.
+    ///
+    /// # Returns
+    ///
+    /// * `BitcoinHeader` - A BitcoinHeader containing the genesis block information
+    pub fn to_bitcoin_header(&self) -> BitcoinHeader {
+        let inner_header = InnerHeader {
+            version: Version::from_consensus(self.version),
+            prev_blockhash: BitcoinBlockHash::all_zeros(), // Genesis block has no previous block
+            merkle_root: TxMerkleNode::from_byte_array(self.merkle_root.to_byte_array()),
+            time: self.timestamp,
+            bits: CompactTarget::from_consensus(self.bits),
+            nonce: self.nonce,
+        };
+        BitcoinHeader::from(inner_header)
+    }
+
+    /// Creates a full Block from the genesis block information.
+    ///
+    /// # Returns
+    ///
+    /// * `BitcoinBlock` - A Block containing the genesis block header and transactions
+    pub fn to_block(&self) -> Block<BitcoinHeader> {
+        let header = self.to_bitcoin_header();
+        // Genesis blocks typically have a single coinbase transaction
+        // For now, we'll create an empty transaction list as the exact transaction
+        // format should be determined by the specific network requirements
+        let transactions = Vec::new();
+        Block::new(header, transactions, None)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::alpha::blockdata::block::BitcoinBlock;
 
     #[test]
     fn test_genesis_info() {
@@ -120,5 +157,64 @@ mod tests {
         assert_eq!(mainnet_genesis.nonce, 40358186);
         assert_eq!(mainnet_genesis.bits, 0x1d0fffff);
         assert_eq!(mainnet_genesis.version, 1);
+    }
+
+    #[test]
+    fn test_genesis_to_bitcoin_header() {
+        let mainnet_genesis = GenesisInfo::mainnet();
+        let header = mainnet_genesis.to_bitcoin_header();
+
+        // Verify header fields match the genesis info
+        assert_eq!(header.0.version.to_consensus(), 1);
+        assert_eq!(header.0.prev_blockhash, BlockHash::all_zeros());
+        assert_eq!(
+            header.0.merkle_root.to_byte_array(),
+            mainnet_genesis.merkle_root.to_byte_array()
+        );
+        assert_eq!(header.0.time, mainnet_genesis.timestamp);
+        assert_eq!(header.0.bits.to_consensus(), mainnet_genesis.bits);
+        assert_eq!(header.0.nonce, mainnet_genesis.nonce);
+    }
+
+    #[test]
+    fn test_genesis_to_block() {
+        let mainnet_genesis = GenesisInfo::mainnet();
+        let block: BitcoinBlock = mainnet_genesis.to_block();
+
+        // Verify block header matches the genesis info
+        assert_eq!(block.header().0.version.to_consensus(), 1);
+        assert_eq!(block.header().0.prev_blockhash, BlockHash::all_zeros());
+        assert_eq!(
+            block.header().0.merkle_root.to_byte_array(),
+            mainnet_genesis.merkle_root.to_byte_array()
+        );
+        assert_eq!(block.header().0.time, mainnet_genesis.timestamp);
+        assert_eq!(block.header().0.bits.to_consensus(), mainnet_genesis.bits);
+        assert_eq!(block.header().0.nonce, mainnet_genesis.nonce);
+
+        // Verify the block has no transactions (as expected for a basic genesis block)
+        assert_eq!(block.transaction_count(), 0);
+    }
+
+    #[test]
+    fn test_genesis_for_network() {
+        let mainnet_genesis = GenesisInfo::for_network(Network::Mainnet);
+        let testnet_genesis = GenesisInfo::for_network(Network::Testnet);
+        let regtest_genesis = GenesisInfo::for_network(Network::Regtest);
+
+        // Mainnet and testnet should have the same values currently
+        assert_eq!(mainnet_genesis.hash, testnet_genesis.hash);
+        assert_eq!(mainnet_genesis.merkle_root, testnet_genesis.merkle_root);
+        assert_eq!(mainnet_genesis.timestamp, testnet_genesis.timestamp);
+
+        // Regtest should have different values
+        assert_ne!(mainnet_genesis.hash, regtest_genesis.hash);
+        assert_ne!(mainnet_genesis.merkle_root, regtest_genesis.merkle_root);
+        assert_ne!(mainnet_genesis.timestamp, regtest_genesis.timestamp);
+
+        // Test that each can be converted to a block
+        let _mainnet_block: BitcoinBlock = mainnet_genesis.to_block();
+        let _testnet_block: BitcoinBlock = testnet_genesis.to_block();
+        let _regtest_block: BitcoinBlock = regtest_genesis.to_block();
     }
 }
