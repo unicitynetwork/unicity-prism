@@ -6,7 +6,7 @@
 //! Unicity Alpha network.
 
 pub use bitcoin::blockdata::block::Header as InnerHeader;
-use bitcoin::{block::ValidationError, BlockHash};
+use bitcoin::{BlockHash, block::ValidationError};
 use serde::{Deserialize, Serialize};
 use unicity_prism_derive::ConsensusCodec;
 
@@ -116,7 +116,7 @@ impl From<InnerHeader> for BitcoinHeader {
 
 #[cfg(test)]
 mod tests {
-    use bitcoin::{block::Version, hashes::Hash, TxMerkleNode};
+    use bitcoin::{TxMerkleNode, block::Version, hashes::Hash};
     use hex::FromHex;
 
     use super::*;

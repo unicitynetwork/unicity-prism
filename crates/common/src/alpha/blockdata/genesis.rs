@@ -1,12 +1,15 @@
 //! Genesis block information for the Unicity network.
 
+use bitcoin::{
+    BlockHash as BitcoinBlockHash, CompactTarget, TxMerkleNode,
+    block::{Header as InnerHeader, Version},
+};
 use serde::{Deserialize, Serialize};
 
-use crate::alpha::blockdata::block::{BitcoinHeader, Block};
-use crate::alpha::{blockdata::block::BlockHash, hashes::Hash, network::Network};
-use bitcoin::{
-    block::Header as InnerHeader, block::Version, BlockHash as BitcoinBlockHash, CompactTarget,
-    TxMerkleNode,
+use crate::alpha::{
+    blockdata::block::{BitcoinHeader, Block, BlockHash},
+    hashes::Hash,
+    network::Network,
 };
 
 /// Genesis block information for different networks.
@@ -109,7 +112,8 @@ impl GenesisInfo {
     ///
     /// # Returns
     ///
-    /// * `BitcoinHeader` - A BitcoinHeader containing the genesis block information
+    /// * `BitcoinHeader` - A BitcoinHeader containing the genesis block
+    ///   information
     pub fn to_bitcoin_header(&self) -> BitcoinHeader {
         let inner_header = InnerHeader {
             version: Version::from_consensus(self.version),
@@ -126,7 +130,8 @@ impl GenesisInfo {
     ///
     /// # Returns
     ///
-    /// * `BitcoinBlock` - A Block containing the genesis block header and transactions
+    /// * `BitcoinBlock` - A Block containing the genesis block header and
+    ///   transactions
     pub fn to_block(&self) -> Block<BitcoinHeader> {
         let header = self.to_bitcoin_header();
         // Genesis blocks typically have a single coinbase transaction

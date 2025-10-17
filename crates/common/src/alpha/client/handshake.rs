@@ -13,9 +13,9 @@ use crate::alpha::{
     blockdata::block::Header,
     client::{
         connection::{ConnectionError, ConnectionManager},
-        message::{connection::Version, Connection, Message},
+        message::{Connection, Message, connection::Version},
     },
-    p2p::{address::AddrV2, ServiceFlags},
+    p2p::{ServiceFlags, address::AddrV2},
 };
 
 /// Information about a peer after successful handshake.

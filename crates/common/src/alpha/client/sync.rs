@@ -28,15 +28,15 @@ use crate::alpha::{
         genesis::GenesisInfo,
     },
     client::{
+        Connection,
         connection::{ConnectionError, ConnectionManager},
         database::BlockDatabase,
         message::{
-            get_data::{GetData, Inventory}, request::GetHeaders, response::{Headers, StandardBlock},
-            Message,
-            Request,
-            Response,
+            Message, Request, Response,
+            get_data::{GetData, Inventory},
+            request::GetHeaders,
+            response::{Headers, StandardBlock},
         },
-        Connection,
     },
     consensus::Params,
     hashes::Hash,
@@ -196,8 +196,6 @@ pub struct ReorgInfo {
 struct BufferedBlock<H: Header> {
     /// The block data
     block: StandardBlock<H>,
-    /// The block hash
-    hash: BlockHash,
     /// The previous block hash
     previous_hash: BlockHash,
 }
@@ -1057,7 +1055,8 @@ impl BlockSynchronizer {
 
         if blocks_synced_this_session >= self.config.max_blocks_to_download as u64 {
             info!(
-                "Reached maximum block limit for this session ({} blocks), stopping synchronization",
+                "Reached maximum block limit for this session ({} blocks), stopping \
+                 synchronization",
                 self.config.max_blocks_to_download
             );
             return true;
@@ -1591,7 +1590,7 @@ impl BlockSynchronizer {
 
             let (batch_block_hashes, batch_inventories): (Vec<_>, Vec<_>) = batch_requests
                 .iter()
-                .map(|(hash, inv, _)| (*hash, inv.clone()))
+                .map(|(hash, inv, _)| (*hash, *inv))
                 .unzip();
 
             info!(
@@ -1651,7 +1650,8 @@ impl BlockSynchronizer {
             .await
     }
 
-    /// Collects the response for a batch request (renamed from collect_blocks_batch)
+    /// Collects the response for a batch request (renamed from
+    /// collect_blocks_batch)
     async fn collect_batch_response<H>(
         &self,
         connection: &ConnectionManager,
@@ -1729,7 +1729,6 @@ impl BlockSynchronizer {
                             block_hash,
                             BufferedBlock {
                                 block: standard_block,
-                                hash: block_hash,
                                 previous_hash: block.header().previous_block_hash(),
                             },
                         );
@@ -1991,10 +1990,10 @@ impl BlockSynchronizer {
 
     /// Removes an invalid block from the database
     async fn remove_invalid_block(&self, block_hash: BlockHash) {
-        if let Some(database) = &self.database {
-            if let Err(db_err) = database.remove_block(&block_hash).await {
-                error!("Failed to remove invalid block from database: {}", db_err);
-            }
+        if let Some(database) = self.database.as_ref()
+            && let Err(db_err) = database.remove_block(&block_hash).await
+        {
+            error!("Failed to remove invalid block from database: {}", db_err);
         }
     }
 
@@ -2390,8 +2389,7 @@ impl BlockSynchronizer {
                             new_tip_hash: header.block_hash(),
                             new_tip_height: prev_height.checked_add(1).unwrap_or_else(|| {
                                 error!(
-                                    "New tip height calculation would overflow, using max \
-                                         value"
+                                    "New tip height calculation would overflow, using max value"
                                 );
                                 u64::MAX
                             }),
